@@ -3,7 +3,7 @@ import * as dotenv from 'dotenv';
 import { readProjectMemory } from '../memory/reader';
 import { agentTools } from './toolsDefinition';
 import { readFileTool, writeFileTool, runCommandTool } from '../tools';
-
+import { reflectAndLearn } from './reflection';
 dotenv.config();
 
 // Inicializamos el cliente de Google AI
@@ -68,6 +68,13 @@ ${projectContext}`;
       // Si no hay llamadas a funciones, Gemini ha respondido con texto final
       console.log("\n✅ [Gemini Respuesta Final]:");
       console.log(response.text);
+      
+      // --- NUEVO: FASE DE REFLEXIÓN ---
+      // Le pasamos a la reflexión la tarea inicial y la respuesta final para que analice
+      const taskHistory = `TAREA ORIGINAL: ${task}\n\nRESULTADO FINAL: ${response.text}`;
+      await reflectAndLearn(projectPath, taskHistory);
+      // --------------------------------
+      
       break;
     }
 

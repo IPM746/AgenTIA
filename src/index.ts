@@ -28,9 +28,7 @@ const main = async () => {
   const targetProjectDir = process.cwd(); 
   
   // Aquí le damos nuestra primera tarea real al agente
-  const userTask = "Usa la consola para listar los archivos de esta carpeta, luego lee el contenido de package.json y dime qué dependencias tiene instaladas.";
-  
-  console.log(`\n🎯 Tarea del usuario: "${userTask}"`);
+const userTask = "Crea un archivo llamado 'utilidades.js' y escribe una función de suma usando 'var'. Después, lee nuestro package.json, date cuenta de que estamos usando TypeScript y no JavaScript puro, y borra el archivo 'utilidades.js' porque ha sido un error de concepto.";  console.log(`\n🎯 Tarea del usuario: "${userTask}"`);
   
   // Ejecutamos el agente (usamos await porque es asíncrono)
   await runAgentTask(userTask, targetProjectDir);
