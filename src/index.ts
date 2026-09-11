@@ -1,36 +1,32 @@
-import * as path from 'path';
-import * as fs from 'fs';
-import * as os from 'os';
+#!/usr/bin/env node
 import { runAgentTask } from './engine/agent';
-
-const getGlobalConfigPath = (): string => {
-  if (os.platform() === 'win32' && process.env.APPDATA) {
-    return path.join(process.env.APPDATA, 'ia-agent');
-  }
-  return path.join(os.homedir(), '.config', 'ia-agent');
-};
-
-const initGlobalEnv = () => {
-  const globalPath = getGlobalConfigPath();
-  if (!fs.existsSync(globalPath)) {
-    fs.mkdirSync(globalPath, { recursive: true });
-    fs.writeFileSync(
-      path.join(globalPath, 'config.json'), 
-      JSON.stringify({ defaultModel: "gpt-4o-mini", maxIter: 5 }, null, 2)
-    );
-  }
-};
+import { runDoctor } from './cli/doctor';
 
 const main = async () => {
-  console.log("🚀 Iniciando IA Agent Core...");
-  initGlobalEnv();
+  const args = process.argv.slice(2);
   
+  if (args.length === 0) {
+    console.log("❌ Error: Tienes que decirme qué hacer.");
+    console.log("💡 Ejemplo: ia-agent \"crea un archivo llamado hola.txt\"");
+    console.log("💡 Ejemplo: ia-agent doctor");
+    process.exit(1);
+  }
+
+  const command = args[0].toLowerCase();
+
+  // Si el usuario escribe "doctor", lanzamos el diagnóstico y salimos
+  if (command === 'doctor') {
+    runDoctor();
+    return;
+  }
+
+  // Si no es "doctor", asumimos que es una tarea para la IA
+  const userTask = args.join(" "); 
   const targetProjectDir = process.cwd(); 
   
-  // Aquí le damos nuestra primera tarea real al agente
-const userTask = "Crea un archivo llamado 'utilidades.js' y escribe una función de suma usando 'var'. Después, lee nuestro package.json, date cuenta de que estamos usando TypeScript y no JavaScript puro, y borra el archivo 'utilidades.js' porque ha sido un error de concepto.";  console.log(`\n🎯 Tarea del usuario: "${userTask}"`);
+  console.log("🚀 Iniciando IA Agent...");
+  console.log(`🎯 Tarea: "${userTask}"`);
   
-  // Ejecutamos el agente (usamos await porque es asíncrono)
   await runAgentTask(userTask, targetProjectDir);
 };
 

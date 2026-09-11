@@ -3,8 +3,12 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "bin": {
+    "ia-agent": "./dist/index.js"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "node --env-file=.env --no-warnings=ExperimentalWarning -r tsx src/index.ts"
   },
   "keywords": [],
   "author": "",
@@ -19,4 +23,5 @@
     "@google/genai": "^2.21.0",
     "dotenv": "^17.4.2"
   }
+  
 }
