@@ -9,6 +9,11 @@ export interface ToolCall {
 export interface LLMResponse {
   text: string;
   toolCalls?: ToolCall[];
+  usage?: {
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+  };
 }
 
 export interface Message {

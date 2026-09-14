@@ -5,8 +5,6 @@ import { execSync } from 'child_process';
 
 /**
  * 🛡️ CAPA DE RESTRICCIÓN DE ARCHIVOS
- * Importante: Esto previene path traversal básico y protege secretos conocidos,
- * pero no equivale a un entorno chroot/aislado real.
  */
 const getValidatedPath = (targetPath: string): string => {
   const projectRoot = process.cwd();
@@ -18,19 +16,27 @@ const getValidatedPath = (targetPath: string): string => {
     throw new Error(`[Seguridad] Bloqueado: Intento de acceso fuera de los límites del proyecto (${targetPath})`);
   }
 
-  // 2. Resolución de Symlinks (solo si el archivo ya existe)
-  if (fs.existsSync(absolutePath)) {
-    const realPath = fs.realpathSync(absolutePath);
-    const realRelative = path.relative(projectRoot, realPath);
-    if (realRelative.startsWith('..') || path.isAbsolute(realRelative)) {
-      throw new Error(`[Seguridad] Bloqueado: El enlace simbólico apunta fuera del proyecto.`);
+  // 2. Resolución de Symlinks en el archivo o cualquiera de sus directorios padres
+  let checkPath = absolutePath;
+  while (true) {
+    if (fs.existsSync(checkPath)) {
+      const realPath = fs.realpathSync(checkPath);
+      const realRelative = path.relative(projectRoot, realPath);
+      if (realRelative.startsWith('..') || path.isAbsolute(realRelative)) {
+        throw new Error(`[Seguridad] Bloqueado: El enlace simbólico apunta fuera del proyecto.`);
+      }
+      // Si el directorio existe y es seguro, no hace falta comprobar más arriba
+      break;
     }
+    const parent = path.dirname(checkPath);
+    if (parent === checkPath) break; // Evita bucles infinitos en la raíz del disco
+    checkPath = parent;
   }
 
-  // 3. Bloqueo de directorios y archivos sensibles (analizando componentes reales)
+  // 3. Bloqueo de directorios y archivos sensibles
   const pathSegments = absolutePath.split(path.sep);
   if (pathSegments.includes('.git')) {
-    throw new Error(`[Seguridad] Bloqueado: No se permite alterar el directorio .git`);
+    throw new Error(`[Seguridad] Bloqueado: No se permite operar sobre .git`);
   }
 
   const fileName = path.basename(absolutePath);
@@ -40,6 +46,7 @@ const getValidatedPath = (targetPath: string): string => {
 
   return absolutePath;
 };
+
 
 // Excepción: La memoria del proyecto NUNCA se trunca
 const isProjectMemory = (filePath: string): boolean => {
@@ -106,11 +113,10 @@ export const runCommandTool = (command: string): string => {
         return `[Seguridad] Comando bloqueado: No se permiten operaciones directas sobre .git`;
     }
 
-    // 3. Detección de comandos destructivos (incluso encadenados con &&, ||, ;, |)
-    // Busca: rm, del, rd, rmdir, format, sudo, mv seguido de un espacio o al final.
-    const dangerousRegex = /(?:^|&&|\|\||;|\|)\s*(rm|del|rd|rmdir|format|sudo|mv)\b/i;
+    // 3. Detección de comandos destructivos (AHORA SÍ CONTIENE '&' y 'remove-item')
+    const dangerousRegex = /(?:^|&&|\|\||;|\||&)\s*(rm|del|rd|rmdir|format|sudo|mv|remove-item)\b/i;
     if (dangerousRegex.test(lowerCmd)) {
-        return `[Seguridad] Comando bloqueado: Contiene operaciones destructivas prohibidas en este entorno.`;
+        return `[Seguridad] comando bloqueado: Contiene operaciones destructivas prohibidas en este entorno.`;
     }
 
     // Aumentamos el timeout a 30s (30000ms) para permitir tests (npm test)

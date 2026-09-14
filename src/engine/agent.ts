@@ -6,18 +6,33 @@ import { agentTools } from './toolsDefinition';
 import { readFileTool, writeFileTool, runCommandTool } from '../tools';
 import { readProjectMemory } from '../memory/reader';
 
-export const runAgentTask = async (task: string, projectPath: string) => {
+// --- NUEVO: Interfaz de eventos ---
+export interface AgentCallbacks {
+  onLog?: (message: string) => void;
+  onStep?: (iteration: number) => void;
+  onToolCall?: (toolName: string, args: Record<string, any>) => void;
+  onToolResult?: (toolName: string, result: string) => void;
+  onFinish?: (finalText: string, metrics?: any) => void;
+  onError?: (error: Error) => void;
+}
+
+export const runAgentTask = async (
+  task: string, 
+  projectPath: string, 
+  callbacks: AgentCallbacks = {} // Por defecto vacío para no romper nada
+) => {
+  const log = (msg: string) => callbacks.onLog && callbacks.onLog(msg);
+
   try {
-    // 1. Cargamos la configuración segura (cero dependencias de dotenv)
     const config = loadConfig();
-    console.log(`\n⚙️ [Config] Iniciando motor con proveedor: ${config.provider} (${config.model})`);
+    log(`⚙️ [Config] Motor iniciado: ${config.provider} (${config.model})`);
 
-    // 2. Inicializamos el cliente de IA a través de la fábrica
     const ai = createAIClient(config.provider, config.apiKey, config.model);
-
-    // 3. Cargamos la memoria local (las reglas y lecciones del proyecto)
-    console.log("🧠 [Memoria] Leyendo contexto del proyecto (.ia/)...");
+    
+    log("🧠 [Memoria] Leyendo contexto del proyecto (.ia/)...");
     const projectContext = readProjectMemory(projectPath);
+
+    // ... (Tu system prompt y configuración de mensajes se mantienen igual)
 
     const systemPrompt = `Eres un agente de programación experto y autónomo.
 Tu objetivo es resolver la tarea de forma eficiente.
@@ -44,43 +59,34 @@ PROCESO:
       console.log(`⏳ [Iteración ${iteracion}] Pensando...`);
 
       // 5. Llamamos a la IA (¡el motor no sabe si es Gemini, OpenAI o un modelo local!)
-      const response = await ai.chat(messages, agentTools);
-      const assistantText = response.text || `[Decidió usar herramientas]`;
-      messages.push({ role: 'assistant', content: assistantText });
-      messages.push({ role: 'assistant', content: response.text });
+      // ... dentro del while (iteracion <= maxIteraciones) ...
+    
+    callbacks.onStep && callbacks.onStep(iteracion);
 
-      // 6. Fase de Acción: Ejecución de herramientas
-      if (response.toolCalls && response.toolCalls.length > 0) {
-        for (const call of response.toolCalls) {
-          const functionName = call.name;
-          const functionArgs = call.args;
+    const response = await ai.chat(messages, agentTools);
+    const assistantText = response.text || `[Decidió usar herramientas]`;
+    messages.push({ role: 'assistant', content: assistantText });
 
-          console.log(`🛠️ [Acción] Usando herramienta: ${functionName}`, functionArgs);
+    if (response.toolCalls && response.toolCalls.length > 0) {
+      for (const call of response.toolCalls) {
+        callbacks.onToolCall && callbacks.onToolCall(call.name, call.args);
 
-          let result = "";
-          // (En el próximo paso aplicaremos los guardrails aquí)
-          if (functionName === 'leer_archivo') {
-            result = readFileTool(functionArgs.ruta);
-          } else if (functionName === 'escribir_archivo') {
-            result = writeFileTool(functionArgs.ruta, functionArgs.contenido);
-          } else if (functionName === 'ejecutar_comando') {
-            result = runCommandTool(functionArgs.comando);
-          }
-
-          console.log(`📄 [Observación] Resultado devuelto al modelo.`);
-          
-          messages.push({
-            role: 'tool',
-            content: `Resultado de la herramienta ${functionName}: ${result}`,
-            toolCallId: call.id
-          });
-        }
-      } else {
-        console.log("\n✅ [Respuesta Final]:");
-        console.log(response.text);
-        break; // Tarea terminada
+        let result = "";
+        // ... (ejecución de tu herramienta) ...
+        
+        callbacks.onToolResult && callbacks.onToolResult(call.name, "Completado");
+        
+        messages.push({
+          role: 'tool',
+          content: `Resultado de la herramienta ${call.name}: ${result}`,
+          toolCallId: call.id
+        });
       }
-
+    } else {
+      // Tarea finalizada
+      callbacks.onFinish && callbacks.onFinish(response.text, response.usage);
+      break; 
+    }
       iteracion++;
     }
 

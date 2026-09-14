@@ -20,7 +20,7 @@ const getGlobalConfigPath = (): string => {
 export const loadConfig = (): AgentConfig => {
   // 1. Valores por defecto
   let provider = process.env.AI_PROVIDER || 'gemini';
-  let model = process.env.AI_MODEL || 'gemini-3.5-flash';
+  let model = process.env.AI_MODEL || 'gemini-3.6-flash';
   let maxIter = 5;
 
   // 2. Leemos la configuración pública del sistema (NUNCA secretos aquí)
