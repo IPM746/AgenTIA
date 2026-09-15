@@ -44,9 +44,13 @@ PROCESO:
 1. Usa las herramientas a tu disposición para investigar y modificar el código.
 2. Cuando hayas terminado, escribe un breve resumen.`;
 
+    const platformHint = process.platform === 'win32'
+      ? '\nENTORNO: Estás ejecutándote en Windows. Usa comandos de PowerShell o CMD, no comandos Unix como ls.'
+      : '';
+
     // 4. Preparamos el historial de mensajes usando nuestra interfaz abstracta
     const messages: Message[] = [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: systemPrompt + platformHint },
       { role: 'user', content: task }
     ];
 
@@ -64,17 +68,37 @@ PROCESO:
     callbacks.onStep && callbacks.onStep(iteracion);
 
     const response = await ai.chat(messages, agentTools);
-    const assistantText = response.text || `[Decidió usar herramientas]`;
-    messages.push({ role: 'assistant', content: assistantText });
+    const responseText = response.text || '';
+    if (responseText) {
+      messages.push({ role: 'assistant', content: responseText });
+    }
 
     if (response.toolCalls && response.toolCalls.length > 0) {
       for (const call of response.toolCalls) {
+        console.log(`🔧 [Herramienta] ${call.name} ${JSON.stringify(call.args)}`);
         callbacks.onToolCall && callbacks.onToolCall(call.name, call.args);
 
         let result = "";
-        // ... (ejecución de tu herramienta) ...
+        try {
+          const filePath = call.args.filePath || call.args.path || call.args.ruta;
+          const content = call.args.content || call.args.contenido;
+          const command = call.args.command || call.args.comando;
+
+          if (call.name === 'readFileTool' || call.name === 'read_file' || call.name === 'leer_archivo') {
+            result = readFileTool(filePath);
+          } else if (call.name === 'writeFileTool' || call.name === 'write_file' || call.name === 'escribir_archivo') {
+            result = writeFileTool(filePath, content);
+          } else if (call.name === 'runCommandTool' || call.name === 'run_command' || call.name === 'ejecutar_comando') {
+            result = runCommandTool(command);
+          } else {
+            result = `Error: Herramienta ${call.name} no reconocida por el motor.`;
+          }
+        } catch (error: any) {
+          result = `Excepción al ejecutar ${call.name}: ${error.message}`;
+        }
         
-        callbacks.onToolResult && callbacks.onToolResult(call.name, "Completado");
+        console.log(`✅ [Resultado] ${result.substring(0, 300)}`);
+        callbacks.onToolResult && callbacks.onToolResult(call.name, result);
         
         messages.push({
           role: 'tool',
@@ -82,9 +106,16 @@ PROCESO:
           toolCallId: call.id
         });
       }
+    } else if (!responseText.trim()) {
+      console.log('⚠️ [Motor] El modelo no devolvió texto ni herramienta; solicitando que continúe.');
+      messages.push({
+        role: 'user',
+        content: 'La respuesta anterior no produjo texto ni una herramienta. Continúa la tarea y usa una herramienta si todavía falta crear o revisar algo.'
+      });
     } else {
       // Tarea finalizada
-      callbacks.onFinish && callbacks.onFinish(response.text, response.usage);
+      console.log(`\n📝 [Respuesta final]\n${responseText}`);
+      callbacks.onFinish && callbacks.onFinish(responseText, response.usage);
       break; 
     }
       iteracion++;

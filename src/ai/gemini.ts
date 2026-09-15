@@ -18,12 +18,20 @@ export class GeminiProvider implements LLMClient {
     const history = messages.filter(m => m.role !== 'system');
 
    
-   // 2. Traducimos nuestro formato genérico al formato de Gemini
+    // 2. Traducimos nuestro formato genérico al formato de Gemini
     const geminiContents = history
-      .filter(msg => msg.content && msg.content.trim() !== '') // Filtramos mensajes vacíos
+      .filter(msg => msg.content && msg.content.trim() !== '')
       .map(msg => {
-        // En Gemini, los resultados de las herramientas se envían desde el lado del "user"
-        const role = (msg.role === 'user' || msg.role === 'tool') ? 'user' : 'model';
+        if (msg.role === 'tool') {
+          return {
+            role: 'user',
+            parts: [{
+              text: `[Resultado de herramienta - ${msg.toolCallId}]: ${msg.content}`
+            }]
+          };
+        }
+
+        const role = msg.role === 'user' ? 'user' : 'model';
         return { role, parts: [{ text: msg.content }] };
       });
 
@@ -46,8 +54,17 @@ export class GeminiProvider implements LLMClient {
       args: call.args as Record<string, any>
     }));
 
+    let safeText = '';
+    if (functionCalls.length === 0) {
+      try {
+        safeText = response.text || '';
+      } catch {
+        safeText = '';
+      }
+    }
+
     return {
-      text: response.text || '',
+      text: safeText,
       toolCalls: parsedToolCalls.length > 0 ? parsedToolCalls : undefined
     };
   }
