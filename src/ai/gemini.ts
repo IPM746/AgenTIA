@@ -1,6 +1,12 @@
 
 import { GoogleGenAI } from '@google/genai';
-import { LLMClient, LLMResponse, Message, ToolCall } from './client';
+import {
+  LLMClient,
+  Message,
+  LLMResponse,
+  LLMUsage,
+  ToolCall
+} from './client';
 
 export class GeminiProvider implements LLMClient {
   private ai: GoogleGenAI;
@@ -129,13 +135,21 @@ export class GeminiProvider implements LLMClient {
         safeText = '';
       }
     }
+    let usage: LLMUsage | undefined;
+        if (response.usageMetadata) {
+            usage = {
+                promptTokens: response.usageMetadata.promptTokenCount,
+                completionTokens: response.usageMetadata.candidatesTokenCount,
+                totalTokens: response.usageMetadata.totalTokenCount,
+                estimated: false
+            };
+        }
 
-    return {
-      text: safeText,
-      toolCalls: parsedToolCalls.length > 0
-        ? parsedToolCalls
-        : undefined
-    };
-  }
+        return {
+            text: safeText,
+            toolCalls: parsedToolCalls.length > 0 ? parsedToolCalls : undefined,
+            usage
+        };
+    }
 }
 
