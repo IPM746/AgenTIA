@@ -69,8 +69,13 @@ PROCESO:
 
     const response = await ai.chat(messages, agentTools);
     const responseText = response.text || '';
-    if (responseText) {
-      messages.push({ role: 'assistant', content: responseText });
+
+    if (responseText || response.toolCalls?.length) {
+      messages.push({
+        role: 'assistant',
+        content: responseText,
+        toolCalls: response.toolCalls
+      });
     }
 
     if (response.toolCalls && response.toolCalls.length > 0) {
@@ -80,10 +85,11 @@ PROCESO:
 
         let result = "";
         try {
-          const filePath = call.args.filePath || call.args.path || call.args.ruta;
-          const content = call.args.content || call.args.contenido;
-          const command = call.args.command || call.args.comando;
+          const filePath = call.args.filePath ?? call.args.path ?? call.args.ruta;
+          const content = call.args.content ?? call.args.contenido;
+          const command = call.args.command ?? call.args.comando;
 
+          
           if (call.name === 'readFileTool' || call.name === 'read_file' || call.name === 'leer_archivo') {
             result = readFileTool(filePath);
           } else if (call.name === 'writeFileTool' || call.name === 'write_file' || call.name === 'escribir_archivo') {
@@ -102,8 +108,9 @@ PROCESO:
         
         messages.push({
           role: 'tool',
-          content: `Resultado de la herramienta ${call.name}: ${result}`,
-          toolCallId: call.id
+          content: result,
+          toolCallId: call.id,
+          toolName: call.name
         });
       }
     } else if (!responseText.trim()) {

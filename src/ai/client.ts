@@ -4,6 +4,8 @@ export interface ToolCall {
   id: string;
   name: string;
   args: Record<string, any>;
+  thoughtSignature?: string;
+
 }
 
 export interface LLMResponse {
@@ -19,12 +21,12 @@ export interface LLMResponse {
 export interface Message {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
-  toolCallId?: string; // Para vincular las respuestas de las herramientas
+
+  toolCallId?: string;
+  toolName?: string;
+  toolCalls?: ToolCall[];
 }
 
 export interface LLMClient {
-  /**
-   * Envía una lista de mensajes al modelo y devuelve su respuesta estandarizada.
-   */
   chat(messages: Message[], tools?: any[]): Promise<LLMResponse>;
 }

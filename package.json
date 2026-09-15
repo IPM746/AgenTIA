@@ -1,0 +1,31 @@
+{
+  "name": "ia-agent-core",
+  "version": "1.0.0",
+  "description": "A small AI coding agent for local development workflows.",
+  "main": "dist/index.js",
+  "bin": {
+    "ia-agent": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "tsx src/index.ts",
+    "dev": "tsx src/index.ts"
+  },
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "typescript",
+    "gemini"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@google/genai": "^2.21.0",
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}
