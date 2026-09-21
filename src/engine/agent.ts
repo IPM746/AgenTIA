@@ -2,9 +2,10 @@ import { loadConfig } from '../config/env';
 import { createAIClient } from '../ai/factory';
 import { agentTools } from './toolsDefinition';
 import { readProjectMemory } from '../memory/reader';
-import { readFileTool, writeFileTool, runCommandTool } from '../tools/index';
+import { readFileTool, writeFileTool, runCommandTool, searchFileTool } from '../tools/index';
 import { AgentMetrics, calculateHistoryChars } from './metrics';
 import { Message } from '../ai/client';
+import { optimizeContext } from './context';
 
 export interface AgentCallbacks {
   onLog?: (message: string) => void;
@@ -66,10 +67,23 @@ PROCESO:
             console.log(`⏳ [Iteración ${iteracion}] Pensando...`);
             if (callbacks.onStep) callbacks.onStep(iteracion);
 
+           
+            // 1. Fotografía del contexto ANTES de enviar al LLM
             const historyMessagesCount = messages.length;
             const historyCharsCount = calculateHistoryChars(messages);
 
-            const response = await ai.chat(messages, agentTools);
+            // --- NUEVO: CONTEXT ENGINE ---
+            // Creamos copia optimizada para enviar al LLM. 
+            // Mantiene las últimas 2 iteraciones completas. Trunca resultados antiguos > 1000 chars.
+            const optimizedMessages = optimizeContext(messages, {
+                maxRecentIterations: 2,
+                truncateThreshold: 1000
+            });
+
+            // 2. Llamada agnóstica al proveedor con los mensajes optimizados
+            const response = await ai.chat(optimizedMessages, agentTools);
+
+
 
             const usage = response.usage;
             
@@ -122,9 +136,12 @@ PROCESO:
                         const filePath = call.args.filePath ?? call.args.path ?? call.args.ruta;
                         const content = call.args.content ?? call.args.contenido;
                         const command = call.args.command ?? call.args.comando;
+                        const searchTerm = call.args.searchTerm ?? call.args.termino; // <-- NUEVO
 
                         if (call.name === 'readFileTool' || call.name === 'read_file' || call.name === 'leer_archivo') {
                             result = readFileTool(filePath);
+                        } else if (call.name === 'searchFileTool' || call.name === 'buscar_archivo') { // <-- NUEVO
+                            result = searchFileTool(filePath, searchTerm);
                         } else if (call.name === 'writeFileTool' || call.name === 'write_file' || call.name === 'escribir_archivo') {
                             result = writeFileTool(filePath, content);
                         } else if (call.name === 'runCommandTool' || call.name === 'run_command' || call.name === 'ejecutar_comando') {
@@ -132,7 +149,7 @@ PROCESO:
                         } else {
                             result = `Error: Herramienta ${call.name} no reconocida por el motor.`;
                         }
-                    } 
+                    }
                     catch (e: any) {
                         result = `Excepción al ejecutar ${call.name}: ${e.message}`;                   
                       }

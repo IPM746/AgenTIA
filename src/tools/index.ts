@@ -94,6 +94,97 @@ export const writeFileTool = (filePath: string, content: string): string => {
   }
 };
 
+export const searchFileTool = (filePath: string, searchTerm: string): string => {
+  try {
+    const safePath = getValidatedPath(filePath);
+    if (!fs.existsSync(safePath)) { 
+      return `Error: El archivo no existe en la ruta: ${filePath}`;
+    }
+    else if (!fs.statSync(safePath).isFile()) {
+      return `Error: La ruta especificada no es un archivo: ${filePath}`;
+    }
+    else if (searchTerm.trim() === '') {
+      return `Error: El término de búsqueda no puede estar vacío.`;
+    }
+    else {
+      const content = fs.readFileSync(safePath, 'utf-8');
+      const lines = content.split('\n');
+      
+      const contextLines = 2; // Líneas extra arriba y abajo
+      const resultLineIndices = new Set<number>();
+
+      // 1. Identificar todas las líneas a incluir (coincidencia + contexto)
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].includes(searchTerm)) {
+          const start = Math.max(0, i - contextLines);
+          const end = Math.min(lines.length - 1, i + contextLines);
+          for (let j = start; j <= end; j++) {
+            resultLineIndices.add(j);
+          }
+        }
+      }
+
+      if (resultLineIndices.size === 0) {
+        return `No se encontraron coincidencias para el término de búsqueda: ${searchTerm}`;
+      }
+
+      // 2. Ordenar y formatear la salida con números de línea
+      const sortedIndices = Array.from(resultLineIndices).sort((a, b) => a - b);
+      let output = `Resultados para "${searchTerm}" en ${path.basename(filePath)}:\n\n`;
+      let lastIndex = -2;
+
+      for (const lineIdx of sortedIndices) {
+        // Añadir separador si hay un salto entre bloques de contexto
+        if (lastIndex !== -2 && lineIdx !== lastIndex + 1) {
+          output += `...\n`;
+        }
+        
+        const lineNumber = lineIdx + 1;
+        // Marcamos con '>' la línea que contiene el término exacto
+        const isMatch = lines[lineIdx].includes(searchTerm) ? ">" : " ";
+        
+        output += `${lineNumber.toString().padStart(4, ' ')} ${isMatch} ${lines[lineIdx]}\n`;
+        lastIndex = lineIdx;
+      }
+      
+      // Control de tamaño por si la búsqueda devuelve medio archivo
+      const MAX_CHARS = 3000;
+      if (output.length > MAX_CHARS) {
+        return `${output.substring(0, MAX_CHARS)}\n\n[Salida truncada: Demasiadas coincidencias. Por favor, refina tu término de búsqueda.]`;
+      }
+
+      return output;
+    }
+  } catch (error: any) {
+    return `Error buscando en el archivo: ${error.message}`;
+  }
+};
+
+export const listFilesTool = (dirPath: string): string => {
+  try {
+    const safePath = getValidatedPath(dirPath);
+    const lowerCmd = dirPath.toLowerCase();
+    
+    if (lowerCmd.includes('.git')) {
+      return `[Seguridad] Comando bloqueado: No se permiten operaciones directas sobre .git`;
+    }
+    if (lowerCmd.includes('../') || lowerCmd.includes('..\\')) {
+      return `[Seguridad] Comando bloqueado: No se permite navegar fuera del directorio actual.`;
+    }
+    if (!fs.existsSync(safePath)) {
+      return `Error: El directorio no existe en la ruta: ${dirPath}`;
+    }
+    
+    if (!fs.statSync(safePath).isDirectory()) {
+      return `Error: La ruta especificada no es un directorio: ${dirPath}`;
+    }
+    const files = fs.readdirSync(safePath);
+    return files.join('\n');
+  } catch (error: any) {
+    return `Error listando archivos: ${error.message}`;
+  }
+};
+
 /**
  * 🛡️ CAPA DE RESTRICCIÓN DE TERMINAL
  * Nota Técnica: Esto es un filtro de Blacklist básico (Deuda Técnica).

@@ -5,7 +5,7 @@ export const agentTools = [
     functionDeclarations: [
       {
         name: 'leer_archivo',
-        description: 'Lee el contenido de un archivo en el ordenador.',
+        description: "Lee el contenido de un archivo. ADVERTENCIA: Consume muchos tokens. Úsalo SOLO cuando necesites leer o sobrescribir el archivo completo. Para explorar código o buscar dónde se define algo, es OBLIGATORIO usar 'searchFileTool' primero.",
         parametersJsonSchema: {
           type: Type.OBJECT,
           properties: {
@@ -24,6 +24,17 @@ export const agentTools = [
             contenido: { type: Type.STRING, description: 'El contenido completo a escribir' }
           },
           required: ['ruta', 'contenido']
+        }
+      },
+      {
+        name: 'searchFileTool',
+        description: "Busca un texto dentro de un archivo y devuelve las líneas coincidentes con su contexto y número de línea. Úsalo SIEMPRE como primera opción para explorar código, localizar variables, funciones, clases o dependencias, en lugar de leer el archivo completo.",        parametersJsonSchema: {
+          type: Type.OBJECT,
+          properties: {
+            filePath: { type: Type.STRING, description: 'La ruta del archivo (ej. src/index.ts)' },
+            searchTerm: { type: Type.STRING, description: 'El término a buscar dentro del archivo' }
+          },
+          required: ['filePath', 'searchTerm']
         }
       },
       {
