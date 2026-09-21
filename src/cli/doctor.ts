@@ -31,8 +31,18 @@ export const runDoctor = () => {
     console.log(`[✓] Modelo seleccionado: ${config.model}`);
     
     // Mostramos que existe la clave, pero NUNCA la imprimimos por pantalla
-    const keyName = config.provider === 'gemini' ? 'GEMINI_API_KEY' : 'OPENAI_API_KEY';
-    console.log(`[✓] ${keyName} (Detectada y cargada correctamente en el entorno)`);
+    if (config.provider === 'ollama') {
+  console.log('[✓] Ollama configurado (sin API key)');
+} else {
+  const keyName =
+    config.provider === 'gemini'
+      ? 'GEMINI_API_KEY'
+      : 'OPENAI_API_KEY';
+
+  console.log(
+    `[✓] ${keyName} (Detectada y cargada correctamente en el entorno)`
+  );
+}
   } catch (error: any) {
     console.log(`[❌] Error de configuración: ${error.message}`);
     hasErrors = true;

@@ -1,5 +1,6 @@
 import { LLMClient } from './client';
 import { GeminiProvider } from './gemini';
+import { OllamaProvider } from './ollama';
 
 export const createAIClient = (
   provider: string,
@@ -16,7 +17,11 @@ export const createAIClient = (
       throw new Error(
         "El proveedor OpenAI está preparado en la arquitectura, pero aún no implementado en el código."
       );
-
+    case 'ollama':
+      return new OllamaProvider(
+        model || 'qwen3.5:4b'
+      );
+      
     default:
       throw new Error(
         `Proveedor '${provider}' no reconocido. Verifica tu configuración.`
