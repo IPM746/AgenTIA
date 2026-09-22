@@ -1,9 +1,16 @@
 export interface ToolCall {
   id: string;
   name: string;
-args: Record<string, any>;
-  // TODO (Deuda Técnica): Específico de Gemini 3.
-  // En el futuro debería abstraerse como provider metadata.
+  args: Record<string, any>;
+
+  /**
+   * Metadata opcional específica de algunos providers.
+   *
+   * Gemini puede utilizarla para conservar información
+   * necesaria entre llamadas con tool calling.
+   *
+   * Otros providers, como Ollama, simplemente la ignoran.
+   */
   thoughtSignature?: string;
 }
 
@@ -24,11 +31,35 @@ export interface Message {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
 
+  /**
+   * Identificador de la llamada a tool a la que
+   * corresponde este mensaje.
+   */
   toolCallId?: string;
+
+  /**
+   * Nombre de la tool ejecutada.
+   */
   toolName?: string;
+
+  /**
+   * Tool calls generadas por el assistant.
+   */
   toolCalls?: ToolCall[];
 }
 
 export interface LLMClient {
-  chat(messages: Message[], tools?: any[]): Promise<LLMResponse>;
+  /**
+   * Envía una conversación al provider.
+   *
+   * Cada provider es responsable de traducir:
+   *
+   *   Message[] + tools
+   *
+   * al formato específico de su API.
+   */
+  chat(
+    messages: Message[],
+    tools?: any[]
+  ): Promise<LLMResponse>;
 }

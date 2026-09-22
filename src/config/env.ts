@@ -1,5 +1,3 @@
-
-// src/config/env.ts
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -13,21 +11,34 @@ export interface AgentConfig {
 
 const getGlobalConfigPath = (): string => {
   if (os.platform() === 'win32' && process.env.APPDATA) {
-    return path.join(process.env.APPDATA, 'ia-agent', 'config.json');
+    return path.join(
+      process.env.APPDATA,
+      'ia-agent',
+      'config.json'
+    );
   }
 
-  return path.join(os.homedir(), '.config', 'ia-agent', 'config.json');
+  return path.join(
+    os.homedir(),
+    '.config',
+    'ia-agent',
+    'config.json'
+  );
 };
 
 export const loadConfig = (): AgentConfig => {
+  // --------------------------------------------------
   // 1. Valores por defecto
+  // --------------------------------------------------
+
   let provider = 'gemini';
   let model = 'gemini-3.6-flash';
   let maxIter = 5;
 
-  // 2. Leemos la configuración global
-  //    Esta configuración tiene prioridad sobre los valores por defecto,
-  //    pero NO sobre las variables de entorno.
+  // --------------------------------------------------
+  // 2. Configuración global
+  // --------------------------------------------------
+
   const configPath = getGlobalConfigPath();
 
   if (fs.existsSync(configPath)) {
@@ -37,44 +48,67 @@ export const loadConfig = (): AgentConfig => {
       );
 
       if (fileConfig.provider) {
-        provider = fileConfig.provider.toLowerCase();
+        provider = String(
+          fileConfig.provider
+        ).toLowerCase();
       }
 
       if (fileConfig.model) {
-        model = fileConfig.model;
+        model = String(fileConfig.model);
       }
 
       if (fileConfig.maxIter) {
-        maxIter = fileConfig.maxIter;
+        maxIter = Number(fileConfig.maxIter);
       }
-    } catch (e) {
+    } catch {
       console.warn(
         '⚠️ Advertencia: Error leyendo el config.json global.'
       );
     }
   }
 
-  // 3. Las variables de entorno tienen la máxima prioridad.
+  // --------------------------------------------------
+  // 3. Variables de entorno
+  // --------------------------------------------------
+
   if (process.env.AI_PROVIDER) {
-    provider = process.env.AI_PROVIDER.toLowerCase();
+    provider =
+      process.env.AI_PROVIDER.toLowerCase();
   }
 
   if (process.env.AI_MODEL) {
     model = process.env.AI_MODEL;
   }
 
-  // Si se selecciona Ollama y no se especificó modelo,
-  // usamos uno local pequeño como valor por defecto.
+  // --------------------------------------------------
+  // 4. Modelo por defecto de Ollama
+  // --------------------------------------------------
+  //
+  // IMPORTANTE:
+  // Antes teníamos:
+  //
+  // if (provider === 'ollama'
+  //     && !process.env.AI_MODEL
+  //     && !model)
+  //
+  // Eso no funcionaba porque `model` ya tenía
+  // el valor por defecto de Gemini.
+  //
+  // Si el provider es Ollama y el usuario no ha
+  // especificado AI_MODEL, usamos qwen3.5:4b.
+  // --------------------------------------------------
+
   if (
     provider === 'ollama' &&
-    !process.env.AI_MODEL &&
-    !model
+    !process.env.AI_MODEL
   ) {
     model = 'qwen3.5:4b';
   }
 
-  // 4. API key.
-  // Ollama local no necesita API key.
+  // --------------------------------------------------
+  // 5. API Key
+  // --------------------------------------------------
+
   let apiKey = '';
   let expectedKeyName = '';
 
@@ -85,15 +119,20 @@ export const loadConfig = (): AgentConfig => {
     expectedKeyName = 'OPENAI_API_KEY';
     apiKey = process.env.OPENAI_API_KEY || '';
   } else if (provider === 'ollama') {
+    // Ollama local no necesita API key.
     apiKey = '';
   }
 
-  // 5. Validamos la API key solo cuando el proveedor la necesita.
   if (provider !== 'ollama' && !apiKey) {
     throw new Error(
-      `Clave de API no encontrada. Por favor, configura la variable de entorno del sistema: ${expectedKeyName}`
+      `Clave de API no encontrada para el proveedor '${provider}'. ` +
+        `Configura la variable de entorno ${expectedKeyName}.`
     );
   }
+
+  // --------------------------------------------------
+  // 6. Resultado
+  // --------------------------------------------------
 
   return {
     provider,

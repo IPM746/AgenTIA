@@ -28,72 +28,29 @@ export class OllamaProvider implements LLMClient {
     messages: Message[],
     tools: any[] = []
   ): Promise<LLMResponse> {
-    const formattedMessages = messages.map((message) => {
-      if (message.role === 'assistant') {
-        return {
-          role: 'assistant',
-          content: message.content || '',
-          ...(message.toolCalls?.length
-            ? {
-                tool_calls: message.toolCalls.map((call) => ({
-                  id: call.id,
-                  type: 'function',
-                  function: {
-                    name: call.name,
-                    arguments: JSON.stringify(call.args)
-                  }
-                }))
-              }
-            : {})
-        };
-      }
+    const formattedMessages = this.formatMessages(messages);
+    const formattedTools = this.formatTools(tools);
 
-      if (message.role === 'tool') {
-        return {
-          role: 'tool',
-          content: message.content,
-          ...(message.toolCallId
-            ? { tool_call_id: message.toolCallId }
-            : {})
-        };
-      }
-
-      return {
-        role: message.role,
-        content: message.content
-      };
-    });
-
-    const formattedTools = tools.flatMap((tool) => {
-      if (!tool.functionDeclarations) {
-        return [];
-      }
-
-      return tool.functionDeclarations.map((declaration: any) => ({
-        type: 'function',
-        function: {
-          name: declaration.name,
-          description: declaration.description,
-          parameters: declaration.parametersJsonSchema
-        }
-      }));
-    });
+    const requestBody = {
+      model: this.model,
+      messages: formattedMessages,
+      ...(formattedTools.length > 0
+        ? { tools: formattedTools }
+        : {}),
+      stream: false
+    };
 
     const response = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        model: this.model,
-        messages: formattedMessages,
-        tools: formattedTools.length > 0 ? formattedTools : undefined,
-        stream: false
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
       const errorText = await response.text();
+
       throw new Error(
         `Ollama API Error ${response.status}: ${errorText}`
       );
@@ -101,6 +58,124 @@ export class OllamaProvider implements LLMClient {
 
     const data = await response.json();
 
+    return this.parseResponse(data);
+  }
+
+  /**
+   * Convierte nuestro formato interno de mensajes
+   * al formato compatible con Ollama.
+   */
+  private formatMessages(messages: Message[]) {
+    return messages.map((message) => {
+      // Mensaje del assistant
+      if (message.role === 'assistant') {
+        const formattedMessage: any = {
+          role: 'assistant',
+          content: message.content || ''
+        };
+
+        if (message.toolCalls?.length) {
+          formattedMessage.tool_calls = message.toolCalls.map(
+            (call) => ({
+              id: call.id,
+              type: 'function',
+              function: {
+                name: call.name,
+                arguments: JSON.stringify(call.args)
+              }
+            })
+          );
+        }
+
+        return formattedMessage;
+      }
+
+      // Resultado de una tool
+      if (message.role === 'tool') {
+        return {
+          role: 'tool',
+          content: message.content,
+          ...(message.toolCallId
+            ? {
+                tool_call_id: message.toolCallId
+              }
+            : {}),
+          ...(message.toolName
+            ? {
+                name: message.toolName
+              }
+            : {})
+        };
+      }
+
+      // user / system
+      return {
+        role: message.role,
+        content: message.content
+      };
+    });
+  }
+
+  /**
+   * Convierte las tools que utiliza AgenTIA/Gemini
+   * al formato de tools que espera Ollama.
+   */
+  private formatTools(tools: any[]) {
+    const formattedTools: any[] = [];
+
+    for (const tool of tools) {
+      /*
+       * Formato actual utilizado por las tools del proyecto:
+       *
+       * {
+       *   functionDeclarations: [
+       *     {
+       *       name,
+       *       description,
+       *       parametersJsonSchema
+       *     }
+       *   ]
+       * }
+       */
+      if (Array.isArray(tool.functionDeclarations)) {
+        for (const declaration of tool.functionDeclarations) {
+          formattedTools.push({
+            type: 'function',
+            function: {
+              name: declaration.name,
+              description: declaration.description || '',
+              parameters:
+                declaration.parametersJsonSchema || {
+                  type: 'object',
+                  properties: {}
+                }
+            }
+          });
+        }
+
+        continue;
+      }
+
+      /*
+       * Permitimos también recibir directamente
+       * una tool ya transformada al formato OpenAI/Ollama.
+       */
+      if (
+        tool.type === 'function' &&
+        tool.function
+      ) {
+        formattedTools.push(tool);
+      }
+    }
+
+    return formattedTools;
+  }
+
+  /**
+   * Convierte la respuesta de Ollama al contrato
+   * común de AgenTIA.
+   */
+  private parseResponse(data: any): LLMResponse {
     const rawToolCalls: OllamaToolCall[] =
       data.message?.tool_calls || [];
 
@@ -108,16 +183,22 @@ export class OllamaProvider implements LLMClient {
       (call, index) => {
         let args: Record<string, any> = {};
 
-        if (typeof call.function?.arguments === 'string') {
+        const rawArguments = call.function?.arguments;
+
+        if (typeof rawArguments === 'string') {
           try {
-            args = JSON.parse(call.function.arguments);
+            args = JSON.parse(rawArguments);
           } catch {
             throw new Error(
-              `Ollama devolvió argumentos JSON inválidos para la herramienta '${call.function?.name}'.`
+              `Ollama devolvió argumentos JSON inválidos para la herramienta '${call.function?.name}'. ` +
+                `Argumentos recibidos: ${rawArguments}`
             );
           }
-        } else {
-          args = call.function?.arguments || {};
+        } else if (
+          rawArguments &&
+          typeof rawArguments === 'object'
+        ) {
+          args = rawArguments;
         }
 
         return {
