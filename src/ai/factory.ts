@@ -21,7 +21,6 @@ export const createAIClient = (
       return new OllamaProvider(
         model || 'qwen3.5:4b'
       );
-      
     default:
       throw new Error(
         `Proveedor '${provider}' no reconocido. Verifica tu configuración.`

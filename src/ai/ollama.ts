@@ -81,7 +81,7 @@ export class OllamaProvider implements LLMClient {
               type: 'function',
               function: {
                 name: call.name,
-                arguments: JSON.stringify(call.args)
+                arguments: call.args
               }
             })
           );
