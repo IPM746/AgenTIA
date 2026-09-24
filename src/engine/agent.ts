@@ -1,7 +1,6 @@
 
 import { loadConfig } from "../config/env";
 import { createAIClient } from "../ai/factory";
-import { agentTools } from "./toolsDefinition";
 import { readProjectMemory } from "../memory/reader";
 import { createBuiltinToolRegistry } from "../tools/builtins";
 import { ToolExecutor } from "../tools/executor";
@@ -118,7 +117,7 @@ PROCESO:
 
       const response = await ai.chat(
         optimizedMessages,
-        agentTools,
+        toolRegistry.list(),
       );
 
       const iterationLatencyMs =

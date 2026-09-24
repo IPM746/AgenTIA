@@ -60,6 +60,7 @@ export interface LLMClient {
    */
   chat(
     messages: Message[],
-    tools?: any[]
+    tools?: readonly Tool[]
   ): Promise<LLMResponse>;
 }
+import { Tool } from '../tools/types';

@@ -4,10 +4,6 @@ import * as path from 'path';
 import { execSync } from 'child_process';
 import { ToolContext } from './types';
 
-const defaultToolContext = (): ToolContext => ({
-  workspacePath: process.cwd(),
-});
-
 /**
  * 🛡️ CAPA DE RESTRICCIÓN DE ARCHIVOS
  */
@@ -65,7 +61,7 @@ const isProjectMemory = (filePath: string): boolean => {
 
 export const readFileTool = (
   filePath: string,
-  context: ToolContext = defaultToolContext(),
+  context: ToolContext,
 ): string => {
   try {
     const safePath = getValidatedPath(filePath, context);
@@ -92,7 +88,7 @@ export const readFileTool = (
 export const writeFileTool = (
   filePath: string,
   content: string,
-  context: ToolContext = defaultToolContext(),
+  context: ToolContext,
 ): string => {
   try {
     const safePath = getValidatedPath(filePath, context);
@@ -112,7 +108,7 @@ export const writeFileTool = (
 export const searchFileTool = (
   filePath: string,
   searchTerm: string,
-  context: ToolContext = defaultToolContext(),
+  context: ToolContext,
 ): string => {
   try {
     const safePath = getValidatedPath(filePath, context);
@@ -181,7 +177,7 @@ export const searchFileTool = (
 
 export const listFilesTool = (
   dirPath: string,
-  context: ToolContext = defaultToolContext(),
+  context: ToolContext,
 ): string => {
   try {
     const safePath = getValidatedPath(dirPath, context);
@@ -210,7 +206,7 @@ export const listFilesTool = (
 // Unused, only for future aplications
 export const readJSONTool = (
   filePath: string,
-  context: ToolContext = defaultToolContext(),
+  context: ToolContext,
 ): string => {
   try {
     const safePath = getValidatedPath(filePath, context);
@@ -237,7 +233,7 @@ export const readJSONTool = (
  */
 export const runCommandTool = (
   command: string,
-  context: ToolContext = defaultToolContext(),
+  context: ToolContext,
 ): string => {
   try {
     const lowerCmd = command.toLowerCase();

@@ -7,6 +7,8 @@ import {
   LLMUsage,
   ToolCall
 } from './client';
+import { toGeminiTools } from './toolAdapters';
+import { Tool } from '../tools/types';
 
 export class GeminiProvider implements LLMClient {
   private ai: GoogleGenAI;
@@ -17,7 +19,10 @@ export class GeminiProvider implements LLMClient {
     this.model = model;
   }
 
-  async chat(messages: Message[], tools: any[] = []): Promise<LLMResponse> {
+  async chat(
+    messages: Message[],
+    tools: readonly Tool[] = [],
+  ): Promise<LLMResponse> {
     const systemMessage = messages.find(
       m => m.role === 'system'
     )?.content;
@@ -104,7 +109,7 @@ export class GeminiProvider implements LLMClient {
       contents: geminiContents,
       config: {
         systemInstruction: systemMessage,
-        tools: tools.length > 0 ? tools : undefined
+        tools: tools.length > 0 ? toGeminiTools(tools) : undefined
       }
     });
 

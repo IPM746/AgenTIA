@@ -5,6 +5,8 @@ import {
   LLMUsage,
   ToolCall
 } from './client';
+import { toOpenAICompatibleTools } from './toolAdapters';
+import { Tool } from '../tools/types';
 
 interface OllamaToolCall {
   function?: {
@@ -26,10 +28,10 @@ export class OllamaProvider implements LLMClient {
 
   async chat(
     messages: Message[],
-    tools: any[] = []
+    tools: readonly Tool[] = []
   ): Promise<LLMResponse> {
     const formattedMessages = this.formatMessages(messages);
-    const formattedTools = this.formatTools(tools);
+    const formattedTools = toOpenAICompatibleTools(tools);
 
     const requestBody = {
       model: this.model,
@@ -114,61 +116,6 @@ export class OllamaProvider implements LLMClient {
         content: message.content
       };
     });
-  }
-
-  /**
-   * Convierte las tools que utiliza AgenTIA/Gemini
-   * al formato de tools que espera Ollama.
-   */
-  private formatTools(tools: any[]) {
-    const formattedTools: any[] = [];
-
-    for (const tool of tools) {
-      /*
-       * Formato actual utilizado por las tools del proyecto:
-       *
-       * {
-       *   functionDeclarations: [
-       *     {
-       *       name,
-       *       description,
-       *       parametersJsonSchema
-       *     }
-       *   ]
-       * }
-       */
-      if (Array.isArray(tool.functionDeclarations)) {
-        for (const declaration of tool.functionDeclarations) {
-          formattedTools.push({
-            type: 'function',
-            function: {
-              name: declaration.name,
-              description: declaration.description || '',
-              parameters:
-                declaration.parametersJsonSchema || {
-                  type: 'object',
-                  properties: {}
-                }
-            }
-          });
-        }
-
-        continue;
-      }
-
-      /*
-       * Permitimos también recibir directamente
-       * una tool ya transformada al formato OpenAI/Ollama.
-       */
-      if (
-        tool.type === 'function' &&
-        tool.function
-      ) {
-        formattedTools.push(tool);
-      }
-    }
-
-    return formattedTools;
   }
 
   /**

@@ -3,7 +3,7 @@ import { Tool, ToolContext } from './types';
 export class ToolExecutor {
   async execute(
     tool: Tool,
-    args: Record<string, any>,
+    args: Record<string, unknown>,
     context: ToolContext,
   ): Promise<string> {
     try {

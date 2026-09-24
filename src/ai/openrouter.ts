@@ -1,9 +1,14 @@
 import { LLMClient, LLMResponse, Message, ToolCall } from './client';
+import { toOpenAICompatibleTools } from './toolAdapters';
+import { Tool } from '../tools/types';
 
 export class OpenRouterProvider implements LLMClient {
   constructor(private apiKey: string, private model: string) {}
 
-  async chat(messages: Message[], tools: any[] = []): Promise<LLMResponse> {
+  async chat(
+    messages: Message[],
+    tools: readonly Tool[] = [],
+  ): Promise<LLMResponse> {
     // Transformamos los mensajes al estándar de OpenRouter/OpenAI
     const formattedMessages = messages.map(m => ({
       role: m.role,
@@ -20,7 +25,9 @@ export class OpenRouterProvider implements LLMClient {
       body: JSON.stringify({
         model: this.model,
         messages: formattedMessages,
-        tools: tools.length > 0 ? tools : undefined
+        tools: tools.length > 0
+          ? toOpenAICompatibleTools(tools)
+          : undefined
       })
     });
 

@@ -10,7 +10,7 @@
     "build": "tsc",
     "start": "tsx src/index.ts",
     "dev": "tsx src/index.ts",
-    "test": "tsx tests/security.test.ts",
+    "test": "tsx tests/security.test.ts && tsx tests/tools.test.ts",
     "benchmark": "tsx benchmarks/run.ts"
   },
   "keywords": [
