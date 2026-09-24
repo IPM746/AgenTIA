@@ -2,12 +2,20 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
+import { ToolContext } from './types';
+
+const defaultToolContext = (): ToolContext => ({
+  workspacePath: process.cwd(),
+});
 
 /**
  * 🛡️ CAPA DE RESTRICCIÓN DE ARCHIVOS
  */
-const getValidatedPath = (targetPath: string): string => {
-  const projectRoot = process.cwd();
+const getValidatedPath = (
+  targetPath: string,
+  context: ToolContext,
+): string => {
+  const projectRoot = context.workspacePath;
   const absolutePath = path.resolve(projectRoot, targetPath);
 
   // 1. Prevención robusta de Path Traversal
@@ -55,9 +63,12 @@ const isProjectMemory = (filePath: string): boolean => {
   return normalizedPath.includes('/.ia/') || normalizedPath.startsWith('.ia/');
 };
 
-export const readFileTool = (filePath: string): string => {
+export const readFileTool = (
+  filePath: string,
+  context: ToolContext = defaultToolContext(),
+): string => {
   try {
-    const safePath = getValidatedPath(filePath);
+    const safePath = getValidatedPath(filePath, context);
     
     if (!fs.existsSync(safePath)) {
       return `Error: El archivo no existe en la ruta: ${filePath}`;
@@ -78,9 +89,13 @@ export const readFileTool = (filePath: string): string => {
   }
 };
 
-export const writeFileTool = (filePath: string, content: string): string => {
+export const writeFileTool = (
+  filePath: string,
+  content: string,
+  context: ToolContext = defaultToolContext(),
+): string => {
   try {
-    const safePath = getValidatedPath(filePath);
+    const safePath = getValidatedPath(filePath, context);
     
     const dir = path.dirname(safePath);
     if (!fs.existsSync(dir)) {
@@ -94,9 +109,13 @@ export const writeFileTool = (filePath: string, content: string): string => {
   }
 };
 
-export const searchFileTool = (filePath: string, searchTerm: string): string => {
+export const searchFileTool = (
+  filePath: string,
+  searchTerm: string,
+  context: ToolContext = defaultToolContext(),
+): string => {
   try {
-    const safePath = getValidatedPath(filePath);
+    const safePath = getValidatedPath(filePath, context);
     if (!fs.existsSync(safePath)) { 
       return `Error: El archivo no existe en la ruta: ${filePath}`;
     }
@@ -160,9 +179,12 @@ export const searchFileTool = (filePath: string, searchTerm: string): string => 
   }
 };
 
-export const listFilesTool = (dirPath: string): string => {
+export const listFilesTool = (
+  dirPath: string,
+  context: ToolContext = defaultToolContext(),
+): string => {
   try {
-    const safePath = getValidatedPath(dirPath);
+    const safePath = getValidatedPath(dirPath, context);
     const lowerCmd = dirPath.toLowerCase();
     
     if (lowerCmd.includes('.git')) {
@@ -186,9 +208,12 @@ export const listFilesTool = (dirPath: string): string => {
 };
 
 // Unused, only for future aplications
-export const readJSONTool = (filePath: string): string => {
+export const readJSONTool = (
+  filePath: string,
+  context: ToolContext = defaultToolContext(),
+): string => {
   try {
-    const safePath = getValidatedPath(filePath);
+    const safePath = getValidatedPath(filePath, context);
 
     if (!fs.existsSync(safePath)) {
       return `Error: El archivo no existe en la ruta: ${filePath}`;
@@ -210,7 +235,10 @@ export const readJSONTool = (filePath: string): string => {
  * Nota Técnica: Esto es un filtro de Blacklist básico (Deuda Técnica).
  * Evita comandos destructivos obvios, pero un atacante sofisticado podría eludirlo.
  */
-export const runCommandTool = (command: string): string => {
+export const runCommandTool = (
+  command: string,
+  context: ToolContext = defaultToolContext(),
+): string => {
   try {
     const lowerCmd = command.toLowerCase();
 
@@ -231,7 +259,7 @@ export const runCommandTool = (command: string): string => {
     }
 
     // Aumentamos el timeout a 30s (30000ms) para permitir tests (npm test)
-    const output = execSync(command, { encoding: 'utf-8', cwd: process.cwd(), timeout: 30000 });
+    const output = execSync(command, { encoding: 'utf-8', cwd: context.workspacePath, timeout: 30000 });
     
     const MAX_CHARS = 3000;
     if (output.length > MAX_CHARS) {

@@ -3,12 +3,9 @@ import { loadConfig } from "../config/env";
 import { createAIClient } from "../ai/factory";
 import { agentTools } from "./toolsDefinition";
 import { readProjectMemory } from "../memory/reader";
-import {
-  readFileTool,
-  writeFileTool,
-  runCommandTool,
-  searchFileTool,
-} from "../tools/index";
+import { createBuiltinToolRegistry } from "../tools/builtins";
+import { ToolExecutor } from "../tools/executor";
+import { ToolContext } from "../tools/types";
 import { AgentMetrics, calculateHistoryChars } from "./metrics";
 import { Message } from "../ai/client";
 import { optimizeContext } from "./context";
@@ -61,6 +58,9 @@ export const runAgentTask = async (
     log("🧠 [Memoria] Leyendo contexto del proyecto (.ia/)...");
 
     const projectContext = readProjectMemory(projectPath);
+    const toolContext: ToolContext = { workspacePath: projectPath };
+    const toolRegistry = createBuiltinToolRegistry();
+    const toolExecutor = new ToolExecutor();
 
     const systemPrompt = `Eres un agente de programación experto y autónomo.
 Tu objetivo es resolver la tarea de forma eficiente.
@@ -184,63 +184,14 @@ PROCESO:
             );
           }
 
-          let result = "";
-
-          try {
-            const filePath =
-              call.args.filePath ??
-              call.args.path ??
-              call.args.ruta;
-
-            const content =
-              call.args.content ??
-              call.args.contenido;
-
-            const command =
-              call.args.command ??
-              call.args.comando;
-
-            const searchTerm =
-              call.args.searchTerm ??
-              call.args.termino;
-
-            if (
-              call.name === "readFileTool" ||
-              call.name === "read_file" ||
-              call.name === "leer_archivo"
-            ) {
-              result = readFileTool(filePath);
-            } else if (
-              call.name === "searchFileTool" ||
-              call.name === "buscar_archivo"
-            ) {
-              result = searchFileTool(
-                filePath,
-                searchTerm,
-              );
-            } else if (
-              call.name === "writeFileTool" ||
-              call.name === "write_file" ||
-              call.name === "escribir_archivo"
-            ) {
-              result = writeFileTool(
-                filePath,
-                content,
-              );
-            } else if (
-              call.name === "runCommandTool" ||
-              call.name === "run_command" ||
-              call.name === "ejecutar_comando"
-            ) {
-              result = runCommandTool(command);
-            } else {
-              result =
-                `Error: Herramienta ${call.name} no reconocida por el motor.`;
-            }
-          } catch (e: any) {
-            result =
-              `Excepción al ejecutar ${call.name}: ${e.message}`;
-          }
+          const tool = toolRegistry.resolve(call.name);
+          const result = tool
+            ? await toolExecutor.execute(
+                tool,
+                call.args,
+                toolContext,
+              )
+            : `Error: Herramienta ${call.name} no reconocida por el motor.`;
 
           if (callbacks.onToolResult) {
             callbacks.onToolResult(
