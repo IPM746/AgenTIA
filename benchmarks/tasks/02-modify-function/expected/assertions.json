@@ -1,0 +1,4 @@
+{
+  "mustMention": ["add", "multiply"],
+  "mustNotModifyFiles": false
+}

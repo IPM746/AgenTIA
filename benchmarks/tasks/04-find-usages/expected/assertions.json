@@ -1,0 +1,7 @@
+{
+  "mustMentionFiles": [
+    "src/service.ts",
+    "src/controller.ts"
+  ],
+  "mustNotModifyFiles": true
+}

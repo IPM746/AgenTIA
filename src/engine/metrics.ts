@@ -8,6 +8,7 @@ export interface IterationMetric {
     estimated: boolean;
     historyMessages: number;
     historyChars: number;
+    latencyMs: number;
 }
 
 export interface AgentMetrics {
@@ -18,6 +19,10 @@ export interface AgentMetrics {
     totalTokens: number;
     isEstimated: boolean;
     iterationDetails: IterationMetric[];
+
+    latencyMs: number;
+    result: 'success' | 'failure' | 'max_iterations';
+    errors: string[];
 }
 
 export const calculateHistoryChars = (messages: Message[]): number => {

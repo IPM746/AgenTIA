@@ -1,0 +1,48 @@
+# AgenTIA Baseline
+
+This directory contains the reproducible baseline for AgenTIA.
+
+## Commit
+
+See `commit.txt`.
+
+## Environment
+
+See `environment.txt`.
+
+## Purpose
+
+The baseline measures the current behavior of AgenTIA before architectural changes.
+
+No optimization or architectural refactoring should be performed while establishing this baseline.
+
+## Providers
+
+The baseline must be executed against:
+
+- Gemini
+- OpenRouter / OpenAI-compatible
+- Ollama
+
+## Golden tasks
+
+1. Read a file and explain its contents.
+2. Modify a function.
+3. Create a file.
+4. Search where a function is used.
+5. Run tests and fix a failing test.
+
+## Metrics
+
+Each run records:
+
+- model
+- provider
+- iterations
+- tool_calls
+- input_tokens
+- output_tokens
+- total_tokens
+- latency
+- result
+- errors

@@ -1,0 +1,5 @@
+import { calculateTotal } from './math';
+
+export function handle(value: number): number {
+  return calculateTotal(value);
+}

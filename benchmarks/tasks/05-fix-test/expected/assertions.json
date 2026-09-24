@@ -1,0 +1,4 @@
+{
+  "testCommandMustPass": true,
+  "expectedMathImplementation": "multiply returns a * b"
+}

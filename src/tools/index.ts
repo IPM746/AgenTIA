@@ -185,6 +185,26 @@ export const listFilesTool = (dirPath: string): string => {
   }
 };
 
+// Unused, only for future aplications
+export const readJSONTool = (filePath: string): string => {
+  try {
+    const safePath = getValidatedPath(filePath);
+
+    if (!fs.existsSync(safePath)) {
+      return `Error: El archivo no existe en la ruta: ${filePath}`;
+    }
+    const content = fs.readFileSync(safePath, 'utf-8');
+    try {
+      const jsonData = JSON.parse(content);
+      return JSON.stringify(jsonData, null, 2);
+    } catch (error: any) {
+      return `Error parseando JSON: ${error.message}`;
+    }
+  } catch (error: any) {
+    return `Error leyendo archivo JSON: ${error.message}`;
+  }
+};
+
 /**
  * 🛡️ CAPA DE RESTRICCIÓN DE TERMINAL
  * Nota Técnica: Esto es un filtro de Blacklist básico (Deuda Técnica).
