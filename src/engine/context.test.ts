@@ -1,6 +1,12 @@
 import * as assert from 'assert';
-import { optimizeContext, ContextOptions } from './context';
+import {
+    compareContexts,
+    ContextOptions,
+    measureContext,
+    optimizeContext,
+} from './context';
 import { Message } from '../ai/client';
+import { Tool } from '../tools/types';
 
 const runTests = () => {
     console.log("Iniciando tests de Context Engine...");
@@ -59,6 +65,53 @@ const runTests = () => {
     assert.ok(optMulti[3].content.includes('truncado'), "t1 (Bloque 1) debería estar truncado");
     assert.strictEqual(optMulti[4].content, 'Pequeño', "t2 (Bloque 1) NO debería truncarse porque es pequeño");
     assert.strictEqual(optMulti[6].content.length, 2000, "t3 (Bloque 2) NO debería truncarse");
+
+    // --- TEST 3: Métricas de contexto bruto y optimizado ---
+    const tools: Tool[] = [{
+        name: 'read',
+        description: 'Lee un archivo.',
+        inputSchema: {
+            type: 'object',
+            properties: { filePath: { type: 'string' } },
+            required: ['filePath'],
+            additionalProperties: false,
+        },
+        execute: () => 'ok',
+    }];
+    const comparison = compareContexts(linearMessages, optLinear, tools);
+    const measurement = measureContext(optLinear, tools);
+
+    assert.ok(comparison.rawContextTokens > comparison.optimizedContextTokens);
+    assert.ok(comparison.savedTokens > 0);
+    assert.strictEqual(comparison.estimated, true);
+    assert.ok(comparison.systemTokens > 0);
+    assert.ok(comparison.userTokens > 0);
+    assert.ok(comparison.toolResultTokens > 0);
+    assert.ok(comparison.toolSchemaTokens > 0);
+    assert.strictEqual(measurement.totalTokens, comparison.optimizedContextTokens);
+
+    // --- TEST 4: Presupuesto determinista y mensajes protegidos ---
+    const budgetMessages: Message[] = [
+        { role: 'system', content: 'System instructions must remain.' },
+        { role: 'user', content: 'User task must remain.' },
+        { role: 'assistant', content: 'Using a tool.', toolCalls: [{ id: 'budget-1', name: 'read', args: {} }] },
+        { role: 'tool', content: 'A'.repeat(3000), toolCallId: 'budget-1', toolName: 'read' },
+        { role: 'assistant', content: 'Using another tool.', toolCalls: [{ id: 'budget-2', name: 'read', args: {} }] },
+        { role: 'tool', content: 'B'.repeat(3000), toolCallId: 'budget-2', toolName: 'read' },
+    ];
+    const budgeted = optimizeContext(budgetMessages, {
+        maxRecentIterations: 2,
+        truncateThreshold: 5000,
+        budget: { maxTokens: 200 },
+    }, tools);
+
+    assert.strictEqual(budgeted[0].content, budgetMessages[0].content);
+    assert.strictEqual(budgeted[1].content, budgetMessages[1].content);
+    assert.ok(budgeted[3].content.includes('presupuesto de contexto'));
+    assert.ok(budgeted[5].content.includes('presupuesto de contexto'));
+    assert.ok(
+        measureContext(budgeted, tools).totalTokens < measureContext(budgetMessages, tools).totalTokens,
+    );
 
     console.log("✅ Todos los tests pasaron correctamente.");
 };

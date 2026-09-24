@@ -9,6 +9,16 @@ export interface IterationMetric {
     historyMessages: number;
     historyChars: number;
     latencyMs: number;
+    rawContextTokens: number;
+    optimizedContextTokens: number;
+    savedTokens: number;
+    savedPercentage: number;
+    systemTokens: number;
+    userTokens: number;
+    historyTokens: number;
+    toolResultTokens: number;
+    toolSchemaTokens: number;
+    contextTokensEstimated: boolean;
 }
 
 export interface AgentMetrics {

@@ -24,6 +24,7 @@ const getSearchTerm = (args: Record<string, unknown>): string =>
 const builtInTools: Tool[] = [
   {
     name: 'leer_archivo',
+    permissions: ['filesystem.read'],
     description: "Lee el contenido de un archivo. ADVERTENCIA: Consume muchos tokens. Úsalo SOLO cuando necesites leer o sobrescribir el archivo completo. Para explorar código o buscar dónde se define algo, es OBLIGATORIO usar 'searchFileTool' primero.",
     inputSchema: {
       type: 'object',
@@ -38,6 +39,7 @@ const builtInTools: Tool[] = [
   },
   {
     name: 'searchFileTool',
+    permissions: ['filesystem.read'],
     description: "Busca un texto dentro de un archivo y devuelve las líneas coincidentes con su contexto y número de línea. Úsalo SIEMPRE como primera opción para explorar código, localizar variables, funciones, clases o dependencias, en lugar de leer el archivo completo.",
     inputSchema: {
       type: 'object',
@@ -53,6 +55,7 @@ const builtInTools: Tool[] = [
   },
   {
     name: 'escribir_archivo',
+    permissions: ['filesystem.write'],
     description: 'Crea o sobrescribe un archivo con nuevo contenido.',
     inputSchema: {
       type: 'object',
@@ -68,6 +71,7 @@ const builtInTools: Tool[] = [
   },
   {
     name: 'ejecutar_comando',
+    permissions: ['process.execute'],
     description: 'Ejecuta un comando en la terminal (ej. tests o lints).',
     inputSchema: {
       type: 'object',
@@ -82,6 +86,7 @@ const builtInTools: Tool[] = [
   },
   {
     name: 'listFilesTool',
+    permissions: ['filesystem.read'],
     description: 'Lista los archivos y directorios de una ruta del proyecto.',
     inputSchema: {
       type: 'object',
@@ -95,6 +100,7 @@ const builtInTools: Tool[] = [
   },
   {
     name: 'readJSONTool',
+    permissions: ['filesystem.read'],
     description: 'Lee y formatea el contenido de un archivo JSON.',
     inputSchema: {
       type: 'object',

@@ -32,6 +32,14 @@ const runTests = async () => {
     () => registry.register(createTool()),
     /ya está registrada/,
   );
+  assert.throws(
+    () => registry.register({
+      ...createTool(),
+      name: 'other_tool',
+      aliases: ['sample'],
+    }),
+    /ya está registrada/,
+  );
 
   let receivedContext: ToolContext | undefined;
   let receivedArgs: Record<string, unknown> | undefined;
