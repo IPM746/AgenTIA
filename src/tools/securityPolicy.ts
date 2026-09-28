@@ -4,6 +4,7 @@ import { Tool, ToolContext, ToolPermission } from './types';
 export interface SecurityDecision {
   allowed: boolean;
   requiresConfirmation: boolean;
+  blocked: boolean;
   risk: LexicalRisk;
   reason?: string;
 }
@@ -22,6 +23,7 @@ export class SecurityPolicy {
       return {
         allowed: false,
         requiresConfirmation: false,
+        blocked: true,
         risk,
         reason: 'se detectó una operación de alto riesgo',
       };
@@ -31,6 +33,7 @@ export class SecurityPolicy {
       return {
         allowed: false,
         requiresConfirmation: true,
+        blocked: false,
         risk,
         reason: 'requiere confirmación humana por señales de riesgo medio',
       };
@@ -47,9 +50,15 @@ export class SecurityPolicy {
       ? {
           allowed: false,
           requiresConfirmation: false,
+          blocked: true,
           risk,
           reason: `requiere el permiso '${denied}'`,
         }
-      : { allowed: true, requiresConfirmation: false, risk };
+      : {
+          allowed: true,
+          requiresConfirmation: false,
+          blocked: false,
+          risk,
+        };
   }
 }

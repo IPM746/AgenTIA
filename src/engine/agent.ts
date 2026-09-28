@@ -115,17 +115,21 @@ PROCESO:
       // Mantiene las últimas 2 iteraciones completas y
       // trunca resultados antiguos > 1000 chars.
       const tools = toolRegistry.list();
+      const contextBudget = config.contextMaxTokens
+        ? { maxTokens: config.contextMaxTokens }
+        : undefined;
       const optimizedMessages = optimizeContext(messages, {
         maxRecentIterations: 2,
         truncateThreshold: 1000,
-        ...(config.contextMaxTokens
-          ? { budget: { maxTokens: config.contextMaxTokens } }
+        ...(contextBudget
+          ? { budget: contextBudget }
           : {}),
       }, tools);
       const contextMetrics = compareContexts(
         messages,
         optimizedMessages,
         tools,
+        contextBudget,
       );
       const historyMessagesCount = optimizedMessages.length;
       const historyCharsCount = calculateHistoryChars(optimizedMessages);
@@ -185,6 +189,9 @@ PROCESO:
         historyTokens: contextMetrics.historyTokens,
         toolResultTokens: contextMetrics.toolResultTokens,
         toolSchemaTokens: contextMetrics.toolSchemaTokens,
+        budgetMaxTokens: contextMetrics.budgetMaxTokens,
+        budgetSatisfied: contextMetrics.budgetSatisfied,
+        budgetShortfallTokens: contextMetrics.budgetShortfallTokens,
         contextTokensEstimated: contextMetrics.estimated,
       });
 
@@ -297,6 +304,11 @@ PROCESO:
           console.log(
             `  Contexto: bruto ~${det.rawContextTokens} | enviado ~${det.optimizedContextTokens} | ahorro ~${det.savedTokens} (${det.savedPercentage.toFixed(1)}%) | estimado: ${det.contextTokensEstimated ? "sí" : "no"}`,
           );
+          if (det.budgetMaxTokens !== undefined) {
+            console.log(
+              `  Presupuesto: ${det.budgetMaxTokens} | cumplido: ${det.budgetSatisfied ? "sí" : "no"} | exceso: ${det.budgetShortfallTokens ?? 0}`,
+            );
+          }
         });
 
         console.log("");

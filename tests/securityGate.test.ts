@@ -5,6 +5,7 @@ import { resolveWorkspacePath } from '../src/tools/security/workspaceGuard';
 import { ToolExecutor } from '../src/tools/executor';
 import { ToolRegistry } from '../src/tools/registry';
 import { Tool, ToolContext } from '../src/tools/types';
+import { createBuiltinToolRegistry } from '../src/tools/builtins';
 
 const context: ToolContext = {
   workspacePath: process.cwd(),
@@ -15,6 +16,7 @@ const tool: Tool = {
   name: 'command_tool',
   description: 'Runs a command.',
   permissions: ['process.execute'],
+  lexicalArguments: ['command'],
   inputSchema: {
     type: 'object',
     properties: {
@@ -97,6 +99,30 @@ const runTests = async () => {
   assert.match(
     await executor.execute(tool, { command: 'cmd /c echo ok', mode: 'safe' }, context),
     /requiere confirmación/,
+  );
+
+  const writeTool = createBuiltinToolRegistry().resolve('escribir_archivo');
+  assert.ok(writeTool);
+  assert.strictEqual(
+    analyzeToolArguments(writeTool, {
+      ruta: 'src/test.ts',
+      contenido: "const command = 'Remove-Item cache -Recurse';",
+    }).risk,
+    'low',
+  );
+
+  const multiPermissionTool: Tool = {
+    ...tool,
+    name: 'multi_permission_tool',
+    permissions: ['filesystem.read', 'process.execute'],
+  };
+  assert.match(
+    await executor.execute(
+      multiPermissionTool,
+      { command: 'echo ok', mode: 'safe' },
+      { workspacePath: context.workspacePath, allowedPermissions: ['filesystem.read'] },
+    ),
+    /process.execute/,
   );
 
   const resolved = registry.resolve('command_tool');

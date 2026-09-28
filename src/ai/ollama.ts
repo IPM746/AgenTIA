@@ -5,6 +5,7 @@ import {
   LLMUsage,
   ToolCall
 } from './client';
+import { serializeMessageContent } from './trust';
 import { toOpenAICompatibleTools } from './toolAdapters';
 import { Tool } from '../tools/types';
 
@@ -73,7 +74,7 @@ export class OllamaProvider implements LLMClient {
       if (message.role === 'assistant') {
         const formattedMessage: any = {
           role: 'assistant',
-          content: message.content || ''
+          content: serializeMessageContent(message) || ''
         };
 
         if (message.toolCalls?.length) {
@@ -96,7 +97,7 @@ export class OllamaProvider implements LLMClient {
       if (message.role === 'tool') {
         return {
           role: 'tool',
-          content: message.content,
+          content: serializeMessageContent(message),
           ...(message.toolCallId
             ? {
                 tool_call_id: message.toolCallId
@@ -113,7 +114,7 @@ export class OllamaProvider implements LLMClient {
       // user / system
       return {
         role: message.role,
-        content: message.content
+        content: serializeMessageContent(message)
       };
     });
   }

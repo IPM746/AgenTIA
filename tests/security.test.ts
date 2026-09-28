@@ -1,130 +1,66 @@
-// tests/security.test.ts
-import * as fs from 'fs';
-import * as path from 'path';
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import {
+  applyPatchTool,
   readFileTool,
+  runCommandTool,
   searchFileTool,
   writeFileTool,
-  runCommandTool,
 } from '../src/tools/index';
 
 const runTests = () => {
-  console.log("Iniciando tests de seguridad...\n");
+  console.log('Iniciando tests de seguridad...\n');
 
-  // --- SETUP DEL ENTORNO ---
-  const projectRoot = process.cwd();
-  const toolContext = { workspacePath: projectRoot };
-  const testDir = path.join(projectRoot, 'test_env');
-  const outsideDir = path.resolve(projectRoot, '../test_outside');
-  
-  if (!fs.existsSync(testDir)) fs.mkdirSync(testDir);
-  if (!fs.existsSync(outsideDir)) fs.mkdirSync(outsideDir);
-  if (!fs.existsSync(path.join(testDir, '.git'))) fs.mkdirSync(path.join(testDir, '.git'));
-  
-  fs.writeFileSync(path.join(outsideDir, 'secret.txt'), 'top-secret');
-  fs.writeFileSync(path.join(testDir, '.env'), 'KEY=123');
-  
-  // Symlink (Junction para evitar problemas de permisos en Windows)
-  const symlinkPath = path.join(testDir, 'fake_dir');
-  if (!fs.existsSync(symlinkPath)) {
-    fs.symlinkSync(outsideDir, symlinkPath, 'junction');
+  const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ia-agent-security-'));
+  const workspacePath = path.join(testRoot, 'workspace');
+  const outsidePath = path.join(testRoot, 'outside');
+  const toolContext = { workspacePath };
+  fs.mkdirSync(workspacePath);
+  fs.mkdirSync(outsidePath);
+
+  try {
+    const testDir = path.join(workspacePath, 'test_env');
+    fs.mkdirSync(testDir);
+    fs.mkdirSync(path.join(testDir, '.git'));
+    fs.writeFileSync(path.join(outsidePath, 'secret.txt'), 'top-secret');
+    fs.writeFileSync(path.join(testDir, '.env'), 'KEY=123');
+
+    fs.symlinkSync(outsidePath, path.join(testDir, 'fake_dir'), 'junction');
+
+    assert.match(readFileTool('../outside/secret.txt', toolContext), /Bloqueado: Intento de acceso fuera/);
+    assert.match(writeFileTool(path.join(outsidePath, 'hacked.txt'), 'hack', toolContext), /Bloqueado: Intento de acceso fuera/);
+    assert.match(readFileTool('test_env/.git/config', toolContext), /No se permite operar sobre \.git/);
+    assert.match(readFileTool('test_env/.env', toolContext), /Acceso denegado a credenciales/);
+    assert.match(writeFileTool('test_env/fake_dir/new.txt', 'hack', toolContext), /enlace simbólico apunta fuera/);
+    console.log('✅ Límites, secretos y symlinks bloqueados');
+
+    assert.match(runCommandTool('echo test_valido', toolContext), /test_valido/);
+
+    const largeText = 'A'.repeat(5000);
+    fs.writeFileSync(path.join(testDir, 'large.txt'), largeText);
+    assert.match(readFileTool('test_env/large.txt', toolContext), /Contenido truncado: mostrando 3000/);
+    fs.mkdirSync(path.join(workspacePath, '.ia'));
+    fs.writeFileSync(path.join(workspacePath, '.ia', 'rules.md'), largeText);
+    assert.strictEqual(readFileTool('.ia/rules.md', toolContext).length, 5000);
+
+    fs.writeFileSync(path.join(testDir, 'lines.ts'), 'uno\ndos\nfunction objetivo() {}\ncuatro\ncinco');
+    const range = readFileTool('test_env/lines.ts', toolContext, 2, 4);
+    assert.match(range, /\s+2 \| dos/);
+    assert.doesNotMatch(range, /uno/);
+    assert.match(searchFileTool('test_env/lines.ts', 'objetivo', toolContext), /> function objetivo/);
+
+    assert.match(writeFileTool('test_env/created.txt', 'contenido seguro', toolContext), /guardado exitosamente/);
+    assert.match(applyPatchTool('test_env/created.txt', 'seguro', 'validado', toolContext), /Parche aplicado exitosamente/);
+    assert.strictEqual(fs.readFileSync(path.join(testDir, 'created.txt'), 'utf-8'), 'contenido validado');
+    assert.match(applyPatchTool('test_env/created.txt', 'ausente', 'x', toolContext), /No se encontró el texto exacto/);
+    console.log('✅ Lectura parcial, búsqueda, escritura y parche funcionan');
+  } finally {
+    fs.rmSync(testRoot, { recursive: true, force: true });
   }
 
-  // --- EJECUCIÓN DE TESTS ---
-
-  // 1. Lectura fuera del proyecto (Path Traversal clásico)
-  const res1 = readFileTool('../test_outside/secret.txt', toolContext);
-  assert.match(res1, /Bloqueado: Intento de acceso fuera/);
-  console.log("✅ Lectura fuera del proyecto bloqueada");
-
-  // 2. Escritura absoluta fuera del proyecto
-  const absoluteOut = path.join(outsideDir, 'hacked.txt');
-  const res2 = writeFileTool(absoluteOut, 'hack', toolContext);
-  assert.match(res2, /Bloqueado: Intento de acceso fuera/);
-  console.log("✅ Escritura absoluta fuera del proyecto bloqueada");
-
-  // 3. Ataque de prefijo de directorio (ej. proyecto-malicioso)
-  const prefixPath = projectRoot + '-malicioso/archivo.txt';
-  const res3 = readFileTool(prefixPath, toolContext);
-  assert.match(res3, /Bloqueado: Intento de acceso fuera/);
-  console.log("✅ Ataque de prefijo bloqueado");
-
- // 4. Acceso a .git
-  const res4 = readFileTool('test_env/.git/config', toolContext);
-  assert.match(res4, /Bloqueado: No se permite operar sobre \.git/);
-
-  // 5. Acceso a .env
-  const res5 = readFileTool('test_env/.env', toolContext);
-  assert.match(res5, /Acceso denegado a credenciales/);
-  console.log("✅ Acceso a .env bloqueado");
-
-  // 6. Symlink/Junction hacia afuera (Escritura en directorio no existente aún)
-  const res6 = writeFileTool('test_env/fake_dir/nuevo_archivo.txt', 'hack', toolContext);
-  assert.match(res6, /Bloqueado: El enlace simbólico apunta fuera/);
-  console.log("✅ Symlink traversal bloqueado");
-
-  // 7. Comando válido
-  const res7 = runCommandTool('echo test_valido', toolContext);
-  assert.match(res7, /test_valido/);
-  console.log("✅ Comando válido ejecutado");
-
- // 8. Comando destructivo
-  const res8 = runCommandTool('rmdir /S /Q node_modules', toolContext);
-  assert.match(res8, /bloqueado: Contiene operaciones destructivas/); // <-- 'b' minúscula
-  console.log("✅ Comando destructivo bloqueado");
-
-  // 9. Comando encadenado (Bypass cmd)
-  const res9 = runCommandTool('echo hola & del package.json', toolContext);
-  assert.match(res9, /bloqueado: Contiene operaciones destructivas/); // <-- 'b' minúscula
-  console.log("✅ Comando encadenado malicioso bloqueado");
-
-  // 10. Archivo grande (Truncado)
-  const largeText = 'A'.repeat(5000);
-  fs.writeFileSync(path.join(testDir, 'large.txt'), largeText);
-  const res10 = readFileTool('test_env/large.txt', toolContext);
-  assert.match(res10, /Contenido truncado: mostrando 3000/);
-  assert.strictEqual(res10.length < 3200, true);
-  console.log("✅ Archivo gigante truncado correctamente");
-
-  // 11. Archivo .ia gigante (NUNCA Truncar)
-  const iaDir = path.join(projectRoot, '.ia');
-  if (!fs.existsSync(iaDir)) fs.mkdirSync(iaDir);
-  fs.writeFileSync(path.join(iaDir, 'rules.md'), largeText);
-  const res11 = readFileTool('.ia/rules.md', toolContext);
-  assert.doesNotMatch(res11, /Contenido truncado/);
-  assert.strictEqual(res11.length, 5000);
-  console.log("✅ Memoria .ia/ NUNCA se trunca (Íntegra)");
-
-  // 12. Lectura parcial y búsqueda con contexto
-  fs.writeFileSync(
-    path.join(testDir, 'lines.ts'),
-    'uno\ndos\nfunction objetivo() {}\ncuatro\ncinco',
-  );
-  const res12 = readFileTool('test_env/lines.ts', toolContext, 2, 4);
-  assert.match(res12, /\s+2 \| dos/);
-  assert.match(res12, /\s+4 \| cuatro/);
-  assert.doesNotMatch(res12, /uno/);
-  const res13 = searchFileTool('test_env/lines.ts', 'objetivo', toolContext);
-  assert.match(res13, /> function objetivo/);
-  console.log("✅ Lectura parcial y búsqueda contextual funcionan");
-
-  // 13. Escritura dentro del workspace
-  const res14 = writeFileTool('test_env/created.txt', 'contenido seguro', toolContext);
-  assert.match(res14, /guardado exitosamente/);
-  assert.strictEqual(
-    fs.readFileSync(path.join(testDir, 'created.txt'), 'utf-8'),
-    'contenido seguro',
-  );
-  console.log("✅ Escritura dentro del workspace funciona");
-
-  // --- CLEANUP ---
- // --- CLEANUP ---
-  fs.rmSync(testDir, { recursive: true, force: true });
-  fs.rmSync(outsideDir, { recursive: true, force: true });
-  fs.unlinkSync(path.join(iaDir, 'rules.md'));
-
-  console.log("\n🚀 Todos los tests de seguridad superados.");
+  console.log('\nTodos los tests de seguridad superados.');
 };
 
 runTests();

@@ -1,6 +1,7 @@
 import { LLMClient, LLMResponse, Message, ToolCall } from './client';
 import { toOpenAICompatibleTools } from './toolAdapters';
 import { Tool } from '../tools/types';
+import { serializeMessageContent } from './trust';
 
 export class OpenRouterProvider implements LLMClient {
   constructor(private apiKey: string, private model: string) {}
@@ -12,7 +13,7 @@ export class OpenRouterProvider implements LLMClient {
     // Transformamos los mensajes al estándar de OpenRouter/OpenAI
     const formattedMessages = messages.map(m => ({
       role: m.role,
-      content: m.content,
+      content: serializeMessageContent(m),
       ...(m.toolCallId && { tool_call_id: m.toolCallId })
     }));
 

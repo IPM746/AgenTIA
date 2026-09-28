@@ -31,6 +31,9 @@ export interface ContextComparison {
   historyTokens: number;
   toolResultTokens: number;
   toolSchemaTokens: number;
+  budgetMaxTokens?: number;
+  budgetSatisfied?: boolean;
+  budgetShortfallTokens?: number;
   estimated: true;
 }
 
@@ -101,6 +104,7 @@ export const compareContexts = (
   rawMessages: Message[],
   optimizedMessages: Message[],
   tools: readonly Tool[] = [],
+  budget?: ContextBudget,
 ): ContextComparison => {
   const raw = measureContext(rawMessages, tools);
   const optimized = measureContext(optimizedMessages, tools);
@@ -119,6 +123,16 @@ export const compareContexts = (
     historyTokens: optimized.historyTokens,
     toolResultTokens: optimized.toolResultTokens,
     toolSchemaTokens: optimized.toolSchemaTokens,
+    ...(budget
+      ? {
+          budgetMaxTokens: budget.maxTokens,
+          budgetSatisfied: optimized.totalTokens <= budget.maxTokens,
+          budgetShortfallTokens: Math.max(
+            0,
+            optimized.totalTokens - budget.maxTokens,
+          ),
+        }
+      : {}),
     estimated: true,
   };
 };
@@ -146,9 +160,12 @@ const truncateForBudget = (
       message.content.length - excessChars,
     );
 
-    message.content =
+    const replacement =
       message.content.substring(0, retainedChars) +
       BUDGET_TRUNCATION_NOTICE;
+    message.content = replacement.length < message.content.length
+      ? replacement
+      : '';
   }
 };
 

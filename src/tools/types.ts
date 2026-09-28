@@ -29,6 +29,7 @@ export interface Tool {
   inputSchema: JsonSchema;
   aliases?: string[];
   permissions?: readonly ToolPermission[];
+  lexicalArguments?: readonly string[];
   execute(
     args: Record<string, unknown>,
     context: ToolContext,

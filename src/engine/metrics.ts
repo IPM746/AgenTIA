@@ -18,6 +18,9 @@ export interface IterationMetric {
     historyTokens: number;
     toolResultTokens: number;
     toolSchemaTokens: number;
+    budgetMaxTokens?: number;
+    budgetSatisfied?: boolean;
+    budgetShortfallTokens?: number;
     contextTokensEstimated: boolean;
 }
 

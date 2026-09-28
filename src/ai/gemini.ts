@@ -7,6 +7,7 @@ import {
   LLMUsage,
   ToolCall
 } from './client';
+import { serializeMessageContent } from './trust';
 import { toGeminiTools } from './toolAdapters';
 import { Tool } from '../tools/types';
 
@@ -40,7 +41,7 @@ export class GeminiProvider implements LLMClient {
             role: 'user',
             parts: [
               {
-                text: msg.content
+                text: serializeMessageContent(msg)
               }
             ]
           });
@@ -54,7 +55,7 @@ export class GeminiProvider implements LLMClient {
 
         if (msg.content?.trim()) {
           parts.push({
-            text: msg.content
+            text: serializeMessageContent(msg)
           });
         }
 
@@ -95,7 +96,7 @@ export class GeminiProvider implements LLMClient {
               functionResponse: {
                 name: msg.toolName || 'herramienta',
                 response: {
-                  result: msg.content
+                  result: serializeMessageContent(msg)
                 }
               }
             }

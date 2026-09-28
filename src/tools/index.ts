@@ -96,6 +96,41 @@ export const writeFileTool = (
   }
 };
 
+export const applyPatchTool = (
+  filePath: string,
+  search: string,
+  replacement: string,
+  context: ToolContext,
+): string => {
+  try {
+    const safePath = getValidatedPath(filePath, context);
+    if (!fs.existsSync(safePath)) {
+      return `Error: El archivo no existe en la ruta: ${filePath}`;
+    }
+    if (!search) {
+      return 'Error: El texto a sustituir no puede estar vacío.';
+    }
+
+    const content = fs.readFileSync(safePath, 'utf-8');
+    const firstMatch = content.indexOf(search);
+    if (firstMatch === -1) {
+      return 'Error: No se encontró el texto exacto para aplicar el parche.';
+    }
+    if (content.indexOf(search, firstMatch + search.length) !== -1) {
+      return 'Error: El texto del parche aparece más de una vez; usa una coincidencia más específica.';
+    }
+
+    const updated =
+      content.substring(0, firstMatch) +
+      replacement +
+      content.substring(firstMatch + search.length);
+    fs.writeFileSync(safePath, updated, 'utf-8');
+    return `Parche aplicado exitosamente en: ${filePath}`;
+  } catch (error: any) {
+    return error.message;
+  }
+};
+
 export const searchFileTool = (
   filePath: string,
   searchTerm: string,
@@ -227,25 +262,6 @@ export const runCommandTool = (
   context: ToolContext,
 ): string => {
   try {
-    const lowerCmd = command.toLowerCase();
-
-    // 1. Bloquear intentos de navegación fuera del proyecto en el terminal
-    if (lowerCmd.includes('../') || lowerCmd.includes('..\\')) {
-      return `[Seguridad] Comando bloqueado: No se permite navegar fuera del directorio actual.`;
-    }
-
-    // 2. Bloquear operaciones sobre .git
-    if (lowerCmd.includes('.git')) {
-        return `[Seguridad] Comando bloqueado: No se permiten operaciones directas sobre .git`;
-    }
-
-    // 3. Detección de comandos destructivos (AHORA SÍ CONTIENE '&' y 'remove-item')
-    const dangerousRegex = /(?:^|&&|\|\||;|\||&)\s*(rm|del|rd|rmdir|format|sudo|mv|remove-item)\b/i;
-    if (dangerousRegex.test(lowerCmd)) {
-        return `[Seguridad] comando bloqueado: Contiene operaciones destructivas prohibidas en este entorno.`;
-    }
-
-    // Aumentamos el timeout a 30s (30000ms) para permitir tests (npm test)
     const output = execSync(command, { encoding: 'utf-8', cwd: context.workspacePath, timeout: 30000 });
     
     const MAX_CHARS = 3000;

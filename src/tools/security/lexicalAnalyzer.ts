@@ -26,13 +26,13 @@ export const analyzeToolArguments = (
   tool: Tool,
   args: Record<string, unknown>,
 ): LexicalSecurityResult => {
-  const text = Object.values(args)
+  const sensitiveArguments = tool.lexicalArguments ?? [];
+  const text = sensitiveArguments
+    .map((name) => args[name])
     .filter((value): value is string => typeof value === 'string')
     .join('\n');
 
-  if (!text || !tool.permissions?.some((permission) =>
-    permission === 'process.execute' || permission === 'filesystem.write',
-  )) {
+  if (!text) {
     return { risk: 'low', matches: [] };
   }
 

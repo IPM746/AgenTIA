@@ -1,4 +1,5 @@
 import {
+  applyPatchTool,
   listFilesTool,
   readFileTool,
   readJSONTool,
@@ -68,6 +69,7 @@ const builtInTools: Tool[] = [
   {
     name: 'escribir_archivo',
     permissions: ['filesystem.write'],
+    lexicalArguments: ['ruta', 'filePath', 'path'],
     description: 'Crea o sobrescribe un archivo con nuevo contenido.',
     inputSchema: {
       type: 'object',
@@ -84,6 +86,7 @@ const builtInTools: Tool[] = [
   {
     name: 'ejecutar_comando',
     permissions: ['process.execute'],
+    lexicalArguments: ['comando', 'command'],
     description: 'Ejecuta un comando en la terminal (ej. tests o lints).',
     inputSchema: {
       type: 'object',
@@ -95,6 +98,30 @@ const builtInTools: Tool[] = [
     aliases: ['runCommandTool', 'run_command'],
     execute: (args, context) =>
       runCommandTool(getCommand(args), context),
+  },
+  {
+    name: 'applyPatchTool',
+    permissions: ['filesystem.write'],
+    lexicalArguments: ['filePath', 'path', 'ruta'],
+    description: 'Sustituye exactamente una coincidencia de texto dentro de un archivo.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filePath: { type: 'string', description: 'La ruta del archivo' },
+        search: { type: 'string', description: 'Texto exacto a sustituir' },
+        replacement: { type: 'string', description: 'Texto de reemplazo' },
+      },
+      required: ['filePath', 'search', 'replacement'],
+      additionalProperties: false,
+    },
+    aliases: ['apply_patch'],
+    execute: (args, context) =>
+      applyPatchTool(
+        getFilePath(args),
+        args.search as string,
+        args.replacement as string,
+        context,
+      ),
   },
   {
     name: 'listFilesTool',

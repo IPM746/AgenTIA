@@ -30,7 +30,7 @@ export interface LLMResponse {
 export interface Message {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
-  source?: 'system' | 'user' | 'project_memory' | 'tool_result' | 'internal';
+  source?: 'system' | 'user' | 'project_memory' | 'tool_result' | 'external_data' | 'internal';
 
   /**
    * Identificador de la llamada a tool a la que
