@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import { ToolContext } from './types';
+import { resolveWorkspacePath } from './security/workspaceGuard';
 
 /**
  * 🛡️ CAPA DE RESTRICCIÓN DE ARCHIVOS
@@ -11,31 +12,7 @@ const getValidatedPath = (
   targetPath: string,
   context: ToolContext,
 ): string => {
-  const projectRoot = context.workspacePath;
-  const absolutePath = path.resolve(projectRoot, targetPath);
-
-  // 1. Prevención robusta de Path Traversal
-  const relativePath = path.relative(projectRoot, absolutePath);
-  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-    throw new Error(`[Seguridad] Bloqueado: Intento de acceso fuera de los límites del proyecto (${targetPath})`);
-  }
-
-  // 2. Resolución de Symlinks en el archivo o cualquiera de sus directorios padres
-  let checkPath = absolutePath;
-  while (true) {
-    if (fs.existsSync(checkPath)) {
-      const realPath = fs.realpathSync(checkPath);
-      const realRelative = path.relative(projectRoot, realPath);
-      if (realRelative.startsWith('..') || path.isAbsolute(realRelative)) {
-        throw new Error(`[Seguridad] Bloqueado: El enlace simbólico apunta fuera del proyecto.`);
-      }
-      // Si el directorio existe y es seguro, no hace falta comprobar más arriba
-      break;
-    }
-    const parent = path.dirname(checkPath);
-    if (parent === checkPath) break; // Evita bucles infinitos en la raíz del disco
-    checkPath = parent;
-  }
+  const absolutePath = resolveWorkspacePath(targetPath, context);
 
   // 3. Bloqueo de directorios y archivos sensibles
   const pathSegments = absolutePath.split(path.sep);
@@ -62,6 +39,8 @@ const isProjectMemory = (filePath: string): boolean => {
 export const readFileTool = (
   filePath: string,
   context: ToolContext,
+  startLine?: number,
+  endLine?: number,
 ): string => {
   try {
     const safePath = getValidatedPath(filePath, context);
@@ -71,6 +50,18 @@ export const readFileTool = (
     }
     
     const content = fs.readFileSync(safePath, 'utf-8');
+    if (startLine !== undefined || endLine !== undefined) {
+      const lines = content.split('\n');
+      const start = Math.max(1, startLine ?? 1);
+      const end = Math.min(lines.length, endLine ?? lines.length);
+      if (start > end) {
+        return 'Error: El rango de líneas solicitado no es válido.';
+      }
+      return lines
+        .slice(start - 1, end)
+        .map((line, index) => `${String(start + index).padStart(4, ' ')} | ${line}`)
+        .join('\n');
+    }
     
     // Solo truncamos si es muy grande Y NO es memoria del proyecto
     const MAX_CHARS = 3000;

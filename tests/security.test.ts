@@ -2,7 +2,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as assert from 'assert';
-import { readFileTool, writeFileTool, runCommandTool } from '../src/tools/index';
+import {
+  readFileTool,
+  searchFileTool,
+  writeFileTool,
+  runCommandTool,
+} from '../src/tools/index';
 
 const runTests = () => {
   console.log("Iniciando tests de seguridad...\n");
@@ -90,6 +95,28 @@ const runTests = () => {
   assert.doesNotMatch(res11, /Contenido truncado/);
   assert.strictEqual(res11.length, 5000);
   console.log("✅ Memoria .ia/ NUNCA se trunca (Íntegra)");
+
+  // 12. Lectura parcial y búsqueda con contexto
+  fs.writeFileSync(
+    path.join(testDir, 'lines.ts'),
+    'uno\ndos\nfunction objetivo() {}\ncuatro\ncinco',
+  );
+  const res12 = readFileTool('test_env/lines.ts', toolContext, 2, 4);
+  assert.match(res12, /\s+2 \| dos/);
+  assert.match(res12, /\s+4 \| cuatro/);
+  assert.doesNotMatch(res12, /uno/);
+  const res13 = searchFileTool('test_env/lines.ts', 'objetivo', toolContext);
+  assert.match(res13, /> function objetivo/);
+  console.log("✅ Lectura parcial y búsqueda contextual funcionan");
+
+  // 13. Escritura dentro del workspace
+  const res14 = writeFileTool('test_env/created.txt', 'contenido seguro', toolContext);
+  assert.match(res14, /guardado exitosamente/);
+  assert.strictEqual(
+    fs.readFileSync(path.join(testDir, 'created.txt'), 'utf-8'),
+    'contenido seguro',
+  );
+  console.log("✅ Escritura dentro del workspace funciona");
 
   // --- CLEANUP ---
  // --- CLEANUP ---

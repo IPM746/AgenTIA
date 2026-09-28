@@ -7,6 +7,7 @@ export interface AgentConfig {
   model: string;
   apiKey: string;
   maxIter: number;
+  contextMaxTokens?: number;
 }
 
 const getGlobalConfigPath = (): string => {
@@ -34,6 +35,7 @@ export const loadConfig = (): AgentConfig => {
   let provider = 'gemini';
   let model = 'gemini-3.6-flash';
   let maxIter = 5;
+  let contextMaxTokens: number | undefined;
 
   // --------------------------------------------------
   // 2. Configuración global
@@ -60,6 +62,10 @@ export const loadConfig = (): AgentConfig => {
       if (fileConfig.maxIter) {
         maxIter = Number(fileConfig.maxIter);
       }
+
+      if (fileConfig.contextMaxTokens) {
+        contextMaxTokens = Number(fileConfig.contextMaxTokens);
+      }
     } catch {
       console.warn(
         '⚠️ Advertencia: Error leyendo el config.json global.'
@@ -78,6 +84,13 @@ export const loadConfig = (): AgentConfig => {
 
   if (process.env.AI_MODEL) {
     model = process.env.AI_MODEL;
+  }
+
+  if (process.env.AI_CONTEXT_MAX_TOKENS) {
+    const configuredBudget = Number(process.env.AI_CONTEXT_MAX_TOKENS);
+    if (Number.isFinite(configuredBudget) && configuredBudget > 0) {
+      contextMaxTokens = configuredBudget;
+    }
   }
 
   // --------------------------------------------------
@@ -138,6 +151,7 @@ export const loadConfig = (): AgentConfig => {
     provider,
     model,
     apiKey,
-    maxIter
+    maxIter,
+    contextMaxTokens
   };
 };

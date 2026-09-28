@@ -57,7 +57,14 @@ export const runAgentTask = async (
     log("🧠 [Memoria] Leyendo contexto del proyecto (.ia/)...");
 
     const projectContext = readProjectMemory(projectPath);
-    const toolContext: ToolContext = { workspacePath: projectPath };
+    const toolContext: ToolContext = {
+      workspacePath: projectPath,
+      allowedPermissions: [
+        'filesystem.read',
+        'filesystem.write',
+        'process.execute',
+      ],
+    };
     const toolRegistry = createBuiltinToolRegistry();
     const toolExecutor = new ToolExecutor();
 
@@ -111,6 +118,9 @@ PROCESO:
       const optimizedMessages = optimizeContext(messages, {
         maxRecentIterations: 2,
         truncateThreshold: 1000,
+        ...(config.contextMaxTokens
+          ? { budget: { maxTokens: config.contextMaxTokens } }
+          : {}),
       }, tools);
       const contextMetrics = compareContexts(
         messages,

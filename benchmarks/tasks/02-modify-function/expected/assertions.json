@@ -1,4 +1,4 @@
 {
-  "mustMention": ["add", "multiply"],
-  "mustNotModifyFiles": false
+  "file": "calculator.ts",
+  "expectedContent": "export function add(\n  a: number,\n  b: number,\n  c: number\n): number {\n  return a + b + c;\n}\n\nexport function multiply(a: number, b: number): number {\n  return a * b;\n}\n"
 }

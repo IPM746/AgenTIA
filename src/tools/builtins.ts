@@ -21,6 +21,11 @@ const getCommand = (args: Record<string, unknown>): string =>
 const getSearchTerm = (args: Record<string, unknown>): string =>
   (args.searchTerm ?? args.termino) as string;
 
+const getLineNumber = (args: Record<string, unknown>, key: string): number | undefined => {
+  const value = args[key];
+  return typeof value === 'number' ? value : undefined;
+};
+
 const builtInTools: Tool[] = [
   {
     name: 'leer_archivo',
@@ -30,12 +35,19 @@ const builtInTools: Tool[] = [
       type: 'object',
       properties: {
         ruta: { type: 'string', description: 'La ruta del archivo (ej. package.json)' },
+        startLine: { type: 'number', description: 'Línea inicial opcional, inclusiva' },
+        endLine: { type: 'number', description: 'Línea final opcional, inclusiva' },
       },
       required: ['ruta'],
     },
     aliases: ['readFileTool', 'read_file'],
     execute: (args, context) =>
-      readFileTool(getFilePath(args), context),
+      readFileTool(
+        getFilePath(args),
+        context,
+        getLineNumber(args, 'startLine'),
+        getLineNumber(args, 'endLine'),
+      ),
   },
   {
     name: 'searchFileTool',
