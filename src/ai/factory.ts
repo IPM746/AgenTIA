@@ -1,6 +1,7 @@
 import { LLMClient } from './client';
 import { GeminiProvider } from './gemini';
 import { OllamaProvider } from './ollama';
+import { OpenRouterProvider } from './openrouter';
 
 export const createAIClient = (
   provider: string,
@@ -21,6 +22,8 @@ export const createAIClient = (
       return new OllamaProvider(
         model || 'qwen3.5:4b'
       );
+    case 'openrouter':
+      return new OpenRouterProvider(apiKey, model);
     default:
       throw new Error(
         `Proveedor '${provider}' no reconocido. Verifica tu configuración.`

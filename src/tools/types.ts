@@ -29,6 +29,8 @@ export interface Tool {
   inputSchema: JsonSchema;
   aliases?: string[];
   permissions?: readonly ToolPermission[];
+  /** Argument names that contain workspace-relative filesystem paths. */
+  pathArguments?: readonly string[];
   lexicalArguments?: readonly string[];
   execute(
     args: Record<string, unknown>,

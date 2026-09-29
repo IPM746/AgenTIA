@@ -5,7 +5,7 @@ import {
   LLMUsage,
   ToolCall
 } from './client';
-import { serializeMessageContent } from './trust';
+import { prepareMessagesForLLM, serializeMessageContent } from './trust';
 import { toOpenAICompatibleTools } from './toolAdapters';
 import { Tool } from '../tools/types';
 
@@ -69,7 +69,7 @@ export class OllamaProvider implements LLMClient {
    * al formato compatible con Ollama.
    */
   private formatMessages(messages: Message[]) {
-    return messages.map((message) => {
+    return prepareMessagesForLLM(messages).map((message) => {
       // Mensaje del assistant
       if (message.role === 'assistant') {
         const formattedMessage: any = {

@@ -17,15 +17,27 @@ export class ToolExecutor {
       return `Error: Argumentos inválidos para ${tool.name}: ${validation.errors.join(' ')}`;
     }
 
-    const pathArgument = args.filePath ?? args.path ?? args.ruta;
-    if (
-      typeof pathArgument === 'string' &&
-      tool.permissions?.some((permission) => permission.startsWith('filesystem.'))
-    ) {
-      try {
-        resolveWorkspacePath(pathArgument, context);
-      } catch (error: unknown) {
-        return error instanceof Error ? error.message : String(error);
+    const permissionDecision = this.securityPolicy.check(tool, context);
+    if (!permissionDecision.allowed) {
+      return `Error: Herramienta ${tool.name} bloqueada por política de seguridad: ${permissionDecision.reason}.`;
+    }
+
+    if (tool.permissions?.some((permission) => permission.startsWith('filesystem.'))) {
+      if (!tool.pathArguments?.length) {
+        return `Error: Herramienta ${tool.name} no declara los argumentos de ruta requeridos por el Security Gate.`;
+      }
+
+      for (const argumentName of tool.pathArguments) {
+        const pathArgument = args[argumentName];
+        if (typeof pathArgument !== 'string') {
+          return `Error: Argumento de ruta inválido para ${tool.name}: ${argumentName}.`;
+        }
+
+        try {
+          resolveWorkspacePath(pathArgument, context);
+        } catch (error: unknown) {
+          return error instanceof Error ? error.message : String(error);
+        }
       }
     }
 

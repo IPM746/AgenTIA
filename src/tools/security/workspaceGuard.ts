@@ -2,32 +2,68 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ToolContext } from '../types';
 
+const isOutside = (rootPath: string, candidatePath: string): boolean => {
+  const relativePath = path.relative(rootPath, candidatePath);
+  return relativePath === '..'
+    || relativePath.startsWith(`..${path.sep}`)
+    || path.isAbsolute(relativePath);
+};
+
+const findFirstExistingPath = (targetPath: string): string => {
+  let currentPath = targetPath;
+
+  while (true) {
+    try {
+      // lstat also sees dangling symbolic links, which existsSync deliberately hides.
+      fs.lstatSync(currentPath);
+      return currentPath;
+    } catch (error) {
+      const errorCode = (error as NodeJS.ErrnoException).code;
+      if (errorCode !== 'ENOENT') {
+        throw error;
+      }
+
+      const parentPath = path.dirname(currentPath);
+      if (parentPath === currentPath) {
+        throw new Error('[Seguridad] Bloqueado: No se ha encontrado un directorio base válido.');
+      }
+      currentPath = parentPath;
+    }
+  }
+};
+
 export const resolveWorkspacePath = (
   targetPath: string,
   context: ToolContext,
 ): string => {
   const workspaceRoot = path.resolve(context.workspacePath);
   const absolutePath = path.resolve(workspaceRoot, targetPath);
-  const relativePath = path.relative(workspaceRoot, absolutePath);
 
-  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+  if (isOutside(workspaceRoot, absolutePath)) {
     throw new Error(`[Seguridad] Bloqueado: Intento de acceso fuera de los límites del proyecto (${targetPath})`);
   }
 
-  let existingPath = absolutePath;
-  while (!fs.existsSync(existingPath)) {
-    const parent = path.dirname(existingPath);
-    if (parent === existingPath) break;
-    existingPath = parent;
+  let realWorkspace: string;
+  try {
+    realWorkspace = fs.realpathSync(workspaceRoot);
+  } catch (error) {
+    throw new Error('[Seguridad] Bloqueado: El workspace no apunta a un directorio existente.');
   }
 
-  if (fs.existsSync(existingPath)) {
-    const realWorkspace = fs.realpathSync(workspaceRoot);
-    const realPath = fs.realpathSync(existingPath);
-    const realRelative = path.relative(realWorkspace, realPath);
-    if (realRelative.startsWith('..') || path.isAbsolute(realRelative)) {
-      throw new Error('[Seguridad] Bloqueado: El enlace simbólico apunta fuera del proyecto.');
+  const existingPath = findFirstExistingPath(absolutePath);
+  let realExistingPath: string;
+  try {
+    realExistingPath = fs.realpathSync(existingPath);
+  } catch (error) {
+    const errorCode = (error as NodeJS.ErrnoException).code;
+    if (errorCode === 'ENOENT') {
+      throw new Error('[Seguridad] Bloqueado: El enlace simbólico no tiene un destino válido.');
     }
+    throw error;
+  }
+
+  if (isOutside(realWorkspace, realExistingPath)) {
+    throw new Error('[Seguridad] Bloqueado: El enlace simbólico apunta fuera del proyecto.');
   }
 
   return absolutePath;

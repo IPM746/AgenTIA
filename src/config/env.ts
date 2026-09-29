@@ -10,6 +10,19 @@ export interface AgentConfig {
   contextMaxTokens?: number;
 }
 
+export const getProviderApiKeyName = (
+  provider: string,
+): string | undefined => {
+  switch (provider.toLowerCase()) {
+    case 'gemini':
+      return 'GEMINI_API_KEY';
+    case 'openrouter':
+      return 'OPENROUTER_API_KEY';
+    default:
+      return undefined;
+  }
+};
+
 const getGlobalConfigPath = (): string => {
   if (os.platform() === 'win32' && process.env.APPDATA) {
     return path.join(
@@ -128,9 +141,9 @@ export const loadConfig = (): AgentConfig => {
   if (provider === 'gemini') {
     expectedKeyName = 'GEMINI_API_KEY';
     apiKey = process.env.GEMINI_API_KEY || '';
-  } else if (provider === 'openai') {
-    expectedKeyName = 'OPENAI_API_KEY';
-    apiKey = process.env.OPENAI_API_KEY || '';
+  } else if (provider === 'openrouter') {
+    expectedKeyName = 'OPENROUTER_API_KEY';
+    apiKey = process.env.OPENROUTER_API_KEY || '';
   } else if (provider === 'ollama') {
     // Ollama local no necesita API key.
     apiKey = '';

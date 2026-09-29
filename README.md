@@ -42,9 +42,24 @@ The project uses a Factory so the AI provider can be changed without modifying t
 Currently I'm working with:
 
 * Gemini
+* Ollama
 * OpenRouter
 
 More providers may be added in the future.
+
+Select a provider with `AI_PROVIDER` and its matching credentials:
+
+```powershell
+$env:AI_PROVIDER = 'gemini'
+$env:GEMINI_API_KEY = '...'
+
+$env:AI_PROVIDER = 'ollama'
+$env:AI_MODEL = 'qwen3.5:4b'
+
+$env:AI_PROVIDER = 'openrouter'
+$env:AI_MODEL = 'provider/model-name'
+$env:OPENROUTER_API_KEY = '...'
+```
 
 ## Context
 

@@ -7,7 +7,7 @@ import {
   LLMUsage,
   ToolCall
 } from './client';
-import { serializeMessageContent } from './trust';
+import { prepareMessagesForLLM, serializeMessageContent } from './trust';
 import { toGeminiTools } from './toolAdapters';
 import { Tool } from '../tools/types';
 
@@ -24,11 +24,12 @@ export class GeminiProvider implements LLMClient {
     messages: Message[],
     tools: readonly Tool[] = [],
   ): Promise<LLMResponse> {
-    const systemMessage = messages.find(
+    const trustedMessages = prepareMessagesForLLM(messages);
+    const systemMessage = trustedMessages.find(
       m => m.role === 'system'
     )?.content;
 
-    const history = messages.filter(
+    const history = trustedMessages.filter(
       m => m.role !== 'system'
     );
 

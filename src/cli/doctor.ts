@@ -2,7 +2,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { loadConfig } from '../config/env';
+import { getProviderApiKeyName, loadConfig } from '../config/env';
 
 export const runDoctor = () => {
   console.log("🩺 Iniciando diagnóstico de ia-agent...\n");
@@ -31,18 +31,14 @@ export const runDoctor = () => {
     console.log(`[✓] Modelo seleccionado: ${config.model}`);
     
     // Mostramos que existe la clave, pero NUNCA la imprimimos por pantalla
-    if (config.provider === 'ollama') {
-  console.log('[✓] Ollama configurado (sin API key)');
-} else {
-  const keyName =
-    config.provider === 'gemini'
-      ? 'GEMINI_API_KEY'
-      : 'OPENAI_API_KEY';
-
-  console.log(
-    `[✓] ${keyName} (Detectada y cargada correctamente en el entorno)`
-  );
-}
+    const keyName = getProviderApiKeyName(config.provider);
+    if (!keyName) {
+      console.log('[✓] Ollama configurado (sin API key)');
+    } else {
+      console.log(
+        `[✓] ${keyName} (Detectada y cargada correctamente en el entorno)`,
+      );
+    }
   } catch (error: any) {
     console.log(`[❌] Error de configuración: ${error.message}`);
     hasErrors = true;

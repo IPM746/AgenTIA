@@ -31,6 +31,7 @@ const builtInTools: Tool[] = [
   {
     name: 'leer_archivo',
     permissions: ['filesystem.read'],
+    pathArguments: ['ruta'],
     description: "Lee el contenido de un archivo. ADVERTENCIA: Consume muchos tokens. Úsalo SOLO cuando necesites leer o sobrescribir el archivo completo. Para explorar código o buscar dónde se define algo, es OBLIGATORIO usar 'searchFileTool' primero.",
     inputSchema: {
       type: 'object',
@@ -53,6 +54,7 @@ const builtInTools: Tool[] = [
   {
     name: 'searchFileTool',
     permissions: ['filesystem.read'],
+    pathArguments: ['filePath'],
     description: "Busca un texto dentro de un archivo y devuelve las líneas coincidentes con su contexto y número de línea. Úsalo SIEMPRE como primera opción para explorar código, localizar variables, funciones, clases o dependencias, en lugar de leer el archivo completo.",
     inputSchema: {
       type: 'object',
@@ -69,6 +71,7 @@ const builtInTools: Tool[] = [
   {
     name: 'escribir_archivo',
     permissions: ['filesystem.write'],
+    pathArguments: ['ruta'],
     lexicalArguments: ['ruta', 'filePath', 'path'],
     description: 'Crea o sobrescribe un archivo con nuevo contenido.',
     inputSchema: {
@@ -102,6 +105,7 @@ const builtInTools: Tool[] = [
   {
     name: 'applyPatchTool',
     permissions: ['filesystem.write'],
+    pathArguments: ['filePath'],
     lexicalArguments: ['filePath', 'path', 'ruta'],
     description: 'Sustituye exactamente una coincidencia de texto dentro de un archivo.',
     inputSchema: {
@@ -126,6 +130,7 @@ const builtInTools: Tool[] = [
   {
     name: 'listFilesTool',
     permissions: ['filesystem.read'],
+    pathArguments: ['filePath'],
     description: 'Lista los archivos y directorios de una ruta del proyecto.',
     inputSchema: {
       type: 'object',
@@ -140,6 +145,7 @@ const builtInTools: Tool[] = [
   {
     name: 'readJSONTool',
     permissions: ['filesystem.read'],
+    pathArguments: ['filePath'],
     description: 'Lee y formatea el contenido de un archivo JSON.',
     inputSchema: {
       type: 'object',
