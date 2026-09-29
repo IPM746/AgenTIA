@@ -8,6 +8,7 @@ export interface AgentConfig {
   apiKey: string;
   maxIter: number;
   contextMaxTokens?: number;
+  verificationMaxCycles: number;
 }
 
 export const getProviderApiKeyName = (
@@ -49,6 +50,7 @@ export const loadConfig = (): AgentConfig => {
   let model = 'gemini-3.6-flash';
   let maxIter = 5;
   let contextMaxTokens: number | undefined;
+  let verificationMaxCycles = 3;
 
   // --------------------------------------------------
   // 2. Configuración global
@@ -79,6 +81,10 @@ export const loadConfig = (): AgentConfig => {
       if (fileConfig.contextMaxTokens) {
         contextMaxTokens = Number(fileConfig.contextMaxTokens);
       }
+
+      if (fileConfig.verificationMaxCycles) {
+        verificationMaxCycles = Number(fileConfig.verificationMaxCycles);
+      }
     } catch {
       console.warn(
         '⚠️ Advertencia: Error leyendo el config.json global.'
@@ -103,6 +109,13 @@ export const loadConfig = (): AgentConfig => {
     const configuredBudget = Number(process.env.AI_CONTEXT_MAX_TOKENS);
     if (Number.isFinite(configuredBudget) && configuredBudget > 0) {
       contextMaxTokens = configuredBudget;
+    }
+  }
+
+  if (process.env.AI_VERIFICATION_MAX_CYCLES) {
+    const configuredCycles = Number(process.env.AI_VERIFICATION_MAX_CYCLES);
+    if (Number.isFinite(configuredCycles) && configuredCycles > 0) {
+      verificationMaxCycles = Math.floor(configuredCycles);
     }
   }
 
@@ -165,6 +178,9 @@ export const loadConfig = (): AgentConfig => {
     model,
     apiKey,
     maxIter,
-    contextMaxTokens
+    contextMaxTokens,
+    verificationMaxCycles: Number.isFinite(verificationMaxCycles) && verificationMaxCycles > 0
+      ? Math.floor(verificationMaxCycles)
+      : 3,
   };
 };

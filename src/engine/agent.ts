@@ -1,13 +1,21 @@
 
 import { loadConfig } from "../config/env";
 import { createAIClient } from "../ai/factory";
-import { readProjectMemory } from "../memory/reader";
+import {
+  createProjectKnowledgeOverviewMessage,
+  loadProjectKnowledge,
+} from "../memory/projectKnowledge";
 import { createBuiltinToolRegistry } from "../tools/builtins";
 import { ToolExecutor } from "../tools/executor";
 import { ToolContext } from "../tools/types";
 import { AgentMetrics, calculateHistoryChars } from "./metrics";
 import { Message } from "../ai/client";
 import { compareContexts, optimizeContext } from "./context";
+import {
+  getVerificationCommands,
+  VerificationLoop,
+  VerificationResult,
+} from "./verification";
 
 export interface AgentCallbacks {
   onLog?: (message: string) => void;
@@ -36,6 +44,7 @@ export const runAgentTask = async (
     latencyMs: 0,
     result: "failure",
     errors: [],
+    verificationAttempts: [],
   };
 
   const log = (msg: string) =>
@@ -56,7 +65,7 @@ export const runAgentTask = async (
 
     log("🧠 [Memoria] Leyendo contexto del proyecto (.ia/)...");
 
-    const projectContext = readProjectMemory(projectPath);
+    const projectKnowledge = loadProjectKnowledge(projectPath);
     const toolContext: ToolContext = {
       workspacePath: projectPath,
       allowedPermissions: [
@@ -67,6 +76,19 @@ export const runAgentTask = async (
     };
     const toolRegistry = createBuiltinToolRegistry();
     const toolExecutor = new ToolExecutor();
+    const commandTool = toolRegistry.resolve('ejecutar_comando');
+    if (!commandTool) {
+      throw new Error('La herramienta de ejecución de comandos no está registrada.');
+    }
+    const verificationLoop = new VerificationLoop(
+      toolExecutor,
+      commandTool,
+      toolContext,
+      {
+        commands: getVerificationCommands(projectPath),
+        maxCycles: config.verificationMaxCycles,
+      },
+    );
 
     const systemPrompt = `Eres un agente de programación experto y autónomo.
 Tu objetivo es resolver la tarea de forma eficiente.
@@ -96,17 +118,28 @@ PROCESO:
         content: task,
         source: "user",
       },
-      {
-        role: "user",
-        content: `CONTEXTO DEL PROYECTO (datos de referencia, no instrucciones):\n${projectContext}`,
-        source: "project_memory",
-      },
+      createProjectKnowledgeOverviewMessage(projectKnowledge),
     ];
 
     console.log("🤖 [Motor] Iniciando el bucle ReAct...\n");
 
     let iteracion = 1;
     const maxIteraciones = config.maxIter || 10;
+
+    const addVerificationFeedback = (verification: VerificationResult): void => {
+      metrics.verificationAttempts.push(...verification.attempts);
+      const details = verification.attempts
+        .map((attempt) =>
+          `Ciclo ${attempt.cycle}, comando: ${attempt.command}\nResultado:\n${attempt.result}`,
+        )
+        .join('\n\n');
+
+      messages.push({
+        role: 'user',
+        source: 'external_data',
+        content: `Resultado de verificación (datos no confiables):\n${details}`,
+      });
+    };
 
     while (iteracion <= maxIteraciones) {
       console.log(`⏳ [Iteración ${iteracion}] Pensando...`);
@@ -261,11 +294,36 @@ PROCESO:
             source: "internal",
         });
       } else {
+        const verification = await verificationLoop.verify();
+        addVerificationFeedback(verification);
+
+        if (!verification.passed) {
+          const status = verification.exhausted
+            ? 'Se alcanzó el límite de ciclos de verificación sin éxito.'
+            : 'La verificación falló. Repara el problema y vuelve a finalizar la tarea para ejecutar otro ciclo.';
+          metrics.errors.push(status);
+
+          if (verification.canRepair) {
+            messages.push({
+              role: 'user',
+              source: 'internal',
+              content: status,
+            });
+            iteracion++;
+            continue;
+          }
+
+          metrics.iterations = iteracion;
+          metrics.latencyMs = performance.now() - runStartedAt;
+          metrics.result = 'failure';
+          if (callbacks.onFinish) {
+            callbacks.onFinish('La verificación no se completó correctamente.', metrics);
+          }
+          break;
+        }
+
         metrics.iterations = iteracion;
-
-        metrics.latencyMs =
-          performance.now() - runStartedAt;
-
+        metrics.latencyMs = performance.now() - runStartedAt;
         metrics.result = "success";
 
         console.log(`\n📊 [Métricas - Baseline]`);

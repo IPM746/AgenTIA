@@ -1,4 +1,5 @@
 import { Message } from '../ai/client';
+import { VerificationAttempt } from './verification';
 
 export interface IterationMetric {
     iteration: number;
@@ -36,6 +37,7 @@ export interface AgentMetrics {
     latencyMs: number;
     result: 'success' | 'failure' | 'max_iterations';
     errors: string[];
+    verificationAttempts: VerificationAttempt[];
 }
 
 export const calculateHistoryChars = (messages: Message[]): number => {
