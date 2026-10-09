@@ -1,9 +1,9 @@
 import {
   applyPatchTool,
+  executeCommand,
   listFilesTool,
   readFileTool,
   readJSONTool,
-  runCommandTool,
   searchFileTool,
   writeFileTool,
 } from './index';
@@ -100,7 +100,7 @@ const builtInTools: Tool[] = [
     },
     aliases: ['runCommandTool', 'run_command'],
     execute: (args, context) =>
-      runCommandTool(getCommand(args), context),
+      executeCommand(getCommand(args), context),
   },
   {
     name: 'applyPatchTool',

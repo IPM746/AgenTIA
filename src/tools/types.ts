@@ -23,6 +23,14 @@ export interface ToolContext {
   allowedPermissions?: readonly ToolPermission[];
 }
 
+export interface ToolExecutionResult {
+  output: string;
+  success: boolean;
+  exitCode?: number;
+  stdout?: string;
+  stderr?: string;
+}
+
 export interface Tool {
   name: string;
   description: string;
@@ -35,5 +43,5 @@ export interface Tool {
   execute(
     args: Record<string, unknown>,
     context: ToolContext,
-  ): string | Promise<string>;
+  ): string | ToolExecutionResult | Promise<string | ToolExecutionResult>;
 }

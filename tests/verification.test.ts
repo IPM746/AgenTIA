@@ -4,8 +4,10 @@ import * as os from 'os';
 import * as path from 'path';
 import {
   getVerificationCommands,
+  shouldRunVerification,
   VerificationLoop,
 } from '../src/engine/verification';
+import { createBuiltinToolRegistry } from '../src/tools/builtins';
 import { ToolExecutor } from '../src/tools/executor';
 import { Tool, ToolContext } from '../src/tools/types';
 
@@ -27,7 +29,14 @@ const createCommandTool = (results: string[], calls: string[]): Tool => ({
   },
   execute: (args) => {
     calls.push(args.comando as string);
-    return results.shift() ?? 'ok';
+    const output = results.shift() ?? 'ok';
+    return {
+      output,
+      success: !output.startsWith('Error:'),
+      exitCode: output.startsWith('Error:') ? 1 : 0,
+      stdout: output.startsWith('Error:') ? '' : output,
+      stderr: output.startsWith('Error:') ? output : '',
+    };
   },
 });
 
@@ -49,6 +58,9 @@ const createLoop = (results: string[], maxCycles?: number) => {
 };
 
 const runTests = async () => {
+  assert.strictEqual(shouldRunVerification(false), false);
+  assert.strictEqual(shouldRunVerification(true), true);
+
   const success = createLoop(['tests ok', 'types ok', 'build ok']);
   const successfulResult = await success.loop.verify();
   assert.strictEqual(successfulResult.passed, true);
@@ -91,6 +103,19 @@ const runTests = async () => {
   assert.strictEqual(blockedResult.passed, false);
   assert.match(blockedResult.attempts[0].result, /bloqueada.*alto riesgo/);
   assert.strictEqual(blockedCalls.length, 0);
+
+  const realCommandTool = createBuiltinToolRegistry().resolve('ejecutar_comando');
+  assert.ok(realCommandTool);
+  const realFailure = new VerificationLoop(
+    new ToolExecutor(),
+    realCommandTool,
+    context,
+    { commands: ['node -e "process.exit(7)"'] },
+  );
+  const realFailureResult = await realFailure.verify();
+  assert.strictEqual(realFailureResult.passed, false);
+  assert.strictEqual(realFailureResult.attempts[0].exitCode, 7);
+  assert.match(realFailureResult.attempts[0].result, /exit code 7/);
 
   const neverInfinite = createLoop(Array(10).fill('Error: failed'), 3);
   for (let index = 0; index < 10; index++) {

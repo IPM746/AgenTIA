@@ -1,4 +1,4 @@
-import { Tool, ToolContext } from './types';
+import { Tool, ToolContext, ToolExecutionResult } from './types';
 import { SecurityPolicy } from './securityPolicy';
 import { validateArguments } from './security/argumentValidator';
 import { analyzeToolArguments } from './security/lexicalAnalyzer';
@@ -12,31 +12,55 @@ export class ToolExecutor {
     args: Record<string, unknown>,
     context: ToolContext,
   ): Promise<string> {
+    const result = await this.executeDetailed(tool, args, context);
+    return result.output;
+  }
+
+  async executeDetailed(
+    tool: Tool,
+    args: Record<string, unknown>,
+    context: ToolContext,
+  ): Promise<ToolExecutionResult> {
     const validation = validateArguments(args, tool.inputSchema);
     if (!validation.valid) {
-      return `Error: Argumentos inválidos para ${tool.name}: ${validation.errors.join(' ')}`;
+      return {
+        output: `Error: Argumentos inválidos para ${tool.name}: ${validation.errors.join(' ')}`,
+        success: false,
+      };
     }
 
     const permissionDecision = this.securityPolicy.check(tool, context);
     if (!permissionDecision.allowed) {
-      return `Error: Herramienta ${tool.name} bloqueada por política de seguridad: ${permissionDecision.reason}.`;
+      return {
+        output: `Error: Herramienta ${tool.name} bloqueada por política de seguridad: ${permissionDecision.reason}.`,
+        success: false,
+      };
     }
 
     if (tool.permissions?.some((permission) => permission.startsWith('filesystem.'))) {
       if (!tool.pathArguments?.length) {
-        return `Error: Herramienta ${tool.name} no declara los argumentos de ruta requeridos por el Security Gate.`;
+        return {
+          output: `Error: Herramienta ${tool.name} no declara los argumentos de ruta requeridos por el Security Gate.`,
+          success: false,
+        };
       }
 
       for (const argumentName of tool.pathArguments) {
         const pathArgument = args[argumentName];
         if (typeof pathArgument !== 'string') {
-          return `Error: Argumento de ruta inválido para ${tool.name}: ${argumentName}.`;
+          return {
+            output: `Error: Argumento de ruta inválido para ${tool.name}: ${argumentName}.`,
+            success: false,
+          };
         }
 
         try {
           resolveWorkspacePath(pathArgument, context);
         } catch (error: unknown) {
-          return error instanceof Error ? error.message : String(error);
+          return {
+            output: error instanceof Error ? error.message : String(error),
+            success: false,
+          };
         }
       }
     }
@@ -51,18 +75,27 @@ export class ToolExecutor {
       const action = decision.requiresConfirmation
         ? 'requiere confirmación'
         : 'bloqueada';
-      return `Error: Herramienta ${tool.name} ${action} por política de seguridad: ${decision.reason}.`;
+      return {
+        output: `Error: Herramienta ${tool.name} ${action} por política de seguridad: ${decision.reason}.`,
+        success: false,
+      };
     }
 
     try {
-      return await tool.execute(args, context);
+      const execution = await tool.execute(args, context);
+      return typeof execution === 'string'
+        ? { output: execution, success: true }
+        : execution;
     } catch (error: unknown) {
       const message =
         error instanceof Error
           ? error.message
           : String(error);
 
-      return `Excepción al ejecutar ${tool.name}: ${message}`;
+      return {
+        output: `Excepción al ejecutar ${tool.name}: ${message}`,
+        success: false,
+      };
     }
   }
 }

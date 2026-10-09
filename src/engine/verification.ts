@@ -8,6 +8,9 @@ export interface VerificationAttempt {
   command: string;
   result: string;
   passed: boolean;
+  exitCode?: number;
+  stdout?: string;
+  stderr?: string;
   error?: string;
 }
 
@@ -26,8 +29,8 @@ export interface VerificationLoopOptions {
 
 const DEFAULT_MAX_CYCLES = 3;
 
-const commandFailed = (result: string): boolean =>
-  result.startsWith('Error:') || result.startsWith('Excepción al ejecutar');
+export const shouldRunVerification = (hasFilesystemWrite: boolean): boolean =>
+  hasFilesystemWrite;
 
 export const getVerificationCommands = (workspacePath: string): string[] => {
   const packagePath = path.join(workspacePath, 'package.json');
@@ -90,18 +93,21 @@ export class VerificationLoop {
     const cycleAttempts: VerificationAttempt[] = [];
 
     for (const command of this.commands) {
-      const result = await this.executor.execute(
+      const execution = await this.executor.executeDetailed(
         this.commandTool,
         { comando: command },
         this.context,
       );
-      const passed = !commandFailed(result);
+      const passed = execution.success && (execution.exitCode === undefined || execution.exitCode === 0);
       const attempt: VerificationAttempt = {
         cycle,
         command,
-        result,
+        result: execution.output,
         passed,
-        ...(passed ? {} : { error: result }),
+        ...(execution.exitCode === undefined ? {} : { exitCode: execution.exitCode }),
+        ...(execution.stdout === undefined ? {} : { stdout: execution.stdout }),
+        ...(execution.stderr === undefined ? {} : { stderr: execution.stderr }),
+        ...(passed ? {} : { error: execution.output }),
       };
       this.attempts.push(attempt);
       cycleAttempts.push(attempt);

@@ -13,6 +13,7 @@ import { Message } from "../ai/client";
 import { compareContexts, optimizeContext } from "./context";
 import {
   getVerificationCommands,
+  shouldRunVerification,
   VerificationLoop,
   VerificationResult,
 } from "./verification";
@@ -125,6 +126,7 @@ PROCESO:
 
     let iteracion = 1;
     const maxIteraciones = config.maxIter || 10;
+    let hasFilesystemWrite = false;
 
     const addVerificationFeedback = (verification: VerificationResult): void => {
       metrics.verificationAttempts.push(...verification.attempts);
@@ -259,13 +261,22 @@ PROCESO:
           }
 
           const tool = toolRegistry.resolve(call.name);
-          const result = tool
-            ? await toolExecutor.execute(
+          const execution = tool
+            ? await toolExecutor.executeDetailed(
                 tool,
                 call.args,
                 toolContext,
               )
-            : `Error: Herramienta ${call.name} no reconocida por el motor.`;
+            : undefined;
+          const result = execution?.output
+            ?? `Error: Herramienta ${call.name} no reconocida por el motor.`;
+
+          if (
+            execution?.success &&
+            tool?.permissions?.some((permission) => permission === 'filesystem.write')
+          ) {
+            hasFilesystemWrite = true;
+          }
 
           if (callbacks.onToolResult) {
             callbacks.onToolResult(
@@ -294,6 +305,16 @@ PROCESO:
             source: "internal",
         });
       } else {
+        if (!shouldRunVerification(hasFilesystemWrite)) {
+          metrics.iterations = iteracion;
+          metrics.latencyMs = performance.now() - runStartedAt;
+          metrics.result = 'success';
+          if (callbacks.onFinish) {
+            callbacks.onFinish(responseText, metrics);
+          }
+          break;
+        }
+
         const verification = await verificationLoop.verify();
         addVerificationFeedback(verification);
 

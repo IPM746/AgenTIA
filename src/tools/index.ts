@@ -2,7 +2,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import { ToolContext } from './types';
+import { ToolContext, ToolExecutionResult } from './types';
 import { resolveWorkspacePath } from './security/workspaceGuard';
 
 /**
@@ -257,20 +257,58 @@ export const readJSONTool = (
  * Nota Técnica: Esto es un filtro de Blacklist básico (Deuda Técnica).
  * Evita comandos destructivos obvios, pero un atacante sofisticado podría eludirlo.
  */
+const limitCommandOutput = (output: string): string => {
+  const MAX_CHARS = 3000;
+  return output.length > MAX_CHARS
+    ? `${output.substring(0, MAX_CHARS)}\n\n[Salida del terminal truncada para evitar sobrecarga de contexto...]`
+    : output;
+};
+
+const commandOutputToText = (value: unknown): string => {
+  if (typeof value === 'string') {
+    return value;
+  }
+  return Buffer.isBuffer(value) ? value.toString('utf-8') : '';
+};
+
+export const executeCommand = (
+  command: string,
+  context: ToolContext,
+): ToolExecutionResult => {
+  try {
+    const stdout = execSync(command, {
+      encoding: 'utf-8',
+      cwd: context.workspacePath,
+      timeout: 30000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    return {
+      output: limitCommandOutput(stdout || 'Comando ejecutado correctamente (sin salida en consola).'),
+      success: true,
+      exitCode: 0,
+      stdout,
+      stderr: '',
+    };
+  } catch (error: any) {
+    const stdout = commandOutputToText(error.stdout);
+    const stderr = commandOutputToText(error.stderr);
+    const exitCode = typeof error.status === 'number' ? error.status : undefined;
+    const details = [stdout, stderr, error.message]
+      .filter((value, index, values) => value && values.indexOf(value) === index)
+      .join('\n');
+
+    return {
+      output: limitCommandOutput(`Error ejecutando comando${exitCode === undefined ? '' : ` (exit code ${exitCode})`}: ${details}`),
+      success: false,
+      exitCode,
+      stdout,
+      stderr,
+    };
+  }
+};
+
 export const runCommandTool = (
   command: string,
   context: ToolContext,
-): string => {
-  try {
-    const output = execSync(command, { encoding: 'utf-8', cwd: context.workspacePath, timeout: 30000 });
-    
-    const MAX_CHARS = 3000;
-    if (output.length > MAX_CHARS) {
-        return `${output.substring(0, MAX_CHARS)}\n\n[Salida del terminal truncada para evitar sobrecarga de contexto...]`;
-    }
-    
-    return output || "Comando ejecutado correctamente (sin salida en consola).";
-  } catch (error: any) {
-    return `Error ejecutando comando: ${error.message}`;
-  }
-};
+): string => executeCommand(command, context).output;
