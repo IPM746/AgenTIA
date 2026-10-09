@@ -1,0 +1,7 @@
+{
+  "provider": "ollama",
+  "model": "qwen3.5:4b",
+  "maxIter": 5,
+  "contextMaxTokens": 12000,
+  "verificationMaxCycles": 3
+}

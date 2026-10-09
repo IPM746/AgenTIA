@@ -54,7 +54,7 @@ const runTests = async () => {
         properties: { value: { type: 'string' } },
         required: ['value'],
       },
-      execute: () => 'ok',
+      execute: () => ({ output: 'ok', success: true, status: 'success' }),
     }];
     const response = await new OpenRouterProvider('router-key', 'provider/model')
       .chat([

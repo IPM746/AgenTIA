@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { LLMClient, LLMResponse, Message } from '../src/ai/client';
 import { AgentConfig } from '../src/config/env';
-import { runAgentTask } from '../src/engine/agent';
+import { getAgentExitCode, runAgentTask } from '../src/engine/agent';
 import { ToolRegistry } from '../src/tools/registry';
 import { Tool, ToolExecutionResult } from '../src/tools/types';
 
@@ -173,6 +173,77 @@ const runTests = async () => {
     assert.strictEqual(readOnlyRun.metrics.verificationStatus, 'not_needed');
     assert.strictEqual(readOnlyRun.metrics.verificationAttempts.length, 0);
     assert.deepStrictEqual(readOnlyCommands, []);
+
+    const blockedWriteCommands: string[] = [];
+    const blockedWriteRun = await runAgentTask(
+      'Intenta modificar el proyecto en modo de solo lectura.',
+      workspacePath,
+      { onLog: () => undefined },
+      {
+        config,
+        mode: 'read_only',
+        ai: new ScriptedClient([
+          {
+            text: '',
+            toolCalls: [{ id: 'blocked-write', name: 'escribir_archivo', args: { ruta: 'blocked.txt', contenido: 'must not exist' } }],
+          },
+          { text: 'No se realizaron cambios.' },
+        ]),
+        toolRegistry: createRegistry(workspacePath, [], blockedWriteCommands),
+        verificationCommands: ['npm test'],
+      },
+    );
+    assert.strictEqual(blockedWriteRun.metrics.mode, 'read_only');
+    assert.strictEqual(blockedWriteRun.metrics.verificationStatus, 'not_needed');
+    assert.strictEqual(fs.existsSync(path.join(workspacePath, 'blocked.txt')), false);
+    assert.deepStrictEqual(blockedWriteCommands, []);
+
+    const processCommands: string[] = [];
+    const processRun = await runAgentTask(
+      'Ejecuta un comando que podría modificar el proyecto.',
+      workspacePath,
+      { onLog: () => undefined },
+      {
+        config,
+        ai: new ScriptedClient([
+          {
+            text: '',
+            toolCalls: [{ id: 'process-write', name: 'ejecutar_comando', args: { comando: 'custom-editor' } }],
+          },
+          { text: 'El cambio por comando está terminado.' },
+        ]),
+        toolRegistry: createRegistry(workspacePath, [
+          { output: 'command completed', success: true, status: 'success', exitCode: 0 },
+          { output: 'tests passed', success: true, status: 'success', exitCode: 0 },
+        ], processCommands),
+        verificationCommands: ['npm test'],
+      },
+    );
+    assert.strictEqual(processRun.metrics.verificationStatus, 'passed');
+    assert.deepStrictEqual(processCommands, ['custom-editor', 'npm test']);
+
+    const unverifiedCommands: string[] = [];
+    const unverifiedRun = await runAgentTask(
+      'Haz un cambio sin scripts de verificación.',
+      workspacePath,
+      { onLog: () => undefined },
+      {
+        config,
+        ai: new ScriptedClient([
+          {
+            text: '',
+            toolCalls: [{ id: 'unverified-write', name: 'escribir_archivo', args: { ruta: 'unverified.txt', contenido: 'changed' } }],
+          },
+          { text: 'Cambio aplicado.' },
+        ]),
+        toolRegistry: createRegistry(workspacePath, [], unverifiedCommands),
+        verificationCommands: [],
+      },
+    );
+    assert.strictEqual(unverifiedRun.metrics.result, 'success');
+    assert.strictEqual(unverifiedRun.metrics.verificationStatus, 'unavailable');
+    assert.strictEqual(getAgentExitCode(unverifiedRun), 2);
+    assert.deepStrictEqual(unverifiedCommands, []);
 
     console.log('Integración de verificación del agente superada.');
   } finally {

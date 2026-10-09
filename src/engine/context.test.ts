@@ -76,7 +76,7 @@ const runTests = () => {
             required: ['filePath'],
             additionalProperties: false,
         },
-        execute: () => 'ok',
+        execute: () => ({ output: 'ok', success: true, status: 'success' }),
     }];
     const comparison = compareContexts(linearMessages, optLinear, tools);
     const measurement = measureContext(optLinear, tools);

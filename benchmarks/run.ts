@@ -1,6 +1,12 @@
 import fs from "fs";
 import path from "path";
 import { spawnSync } from "child_process";
+import {
+  BenchmarkAssertions,
+  evaluateBenchmarkAssertions,
+  snapshotWorkspace,
+} from "../src/benchmark/evaluator";
+import { loadConfig } from "../src/config/env";
 
 const root = process.cwd();
 
@@ -21,6 +27,9 @@ type RunStatus =
   | "failure"
   | "provider_error"
   | "max_iterations"
+  | "verification_failed"
+  | "unverified"
+  | "acceptance_failed"
   | "process_error";
 
 interface RunMetrics {
@@ -30,6 +39,18 @@ interface RunMetrics {
   outputTokens?: number;
   totalTokens?: number;
   latencyMs?: number;
+  estimated?: boolean;
+}
+
+interface AcceptanceMetadata {
+  passed: boolean;
+  failures: string[];
+}
+
+interface PublicConfiguration {
+  maxIterations: number;
+  contextMaxTokens?: number;
+  verificationMaxCycles: number;
 }
 
 interface RunMetadata {
@@ -41,7 +62,14 @@ interface RunMetadata {
   exitCode: number | null;
   signal: NodeJS.Signals | null;
   status: RunStatus;
+  mode: "read_only" | "edit";
+  provider?: string;
+  model?: string;
+  commit?: string;
+  configuration?: PublicConfiguration;
+  verificationStatus?: "not_needed" | "passed" | "failed" | "unavailable";
   metrics: RunMetrics;
+  acceptance: AcceptanceMetadata;
   workspace: string;
   stdout: string;
   stderr: string;
@@ -63,6 +91,14 @@ function extractNumber(
 }
 
 function extractMetrics(output: string): RunMetrics {
+  const inputTokens = extractNumber(
+    output,
+    /Input tokens \(acumulados\):\s*(\d+)/,
+  );
+  const outputTokens = extractNumber(
+    output,
+    /Output tokens \(acumulados\):\s*(\d+)/,
+  );
   return {
     iterations: extractNumber(
       output,
@@ -74,15 +110,9 @@ function extractMetrics(output: string): RunMetrics {
       /Tool calls:\s*(\d+)/,
     ),
 
-    inputTokens: extractNumber(
-      output,
-      /Input tokens \(acumulados\):\s*(\d+)/,
-    ),
+    inputTokens,
 
-    outputTokens: extractNumber(
-      output,
-      /Output tokens \(acumulados\):\s*(\d+)/,
-    ),
+    outputTokens,
 
     totalTokens: extractNumber(
       output,
@@ -93,7 +123,86 @@ function extractMetrics(output: string): RunMetrics {
       output,
       /Latencia total:\s*(\d+)\s*ms/,
     ),
+
+    ...(inputTokens !== undefined || outputTokens !== undefined
+      ? { estimated: output.includes("Origen datos: Estimación local o mixta") }
+      : {}),
   };
+}
+
+function getPublicConfiguration(): PublicConfiguration | undefined {
+  try {
+    const config = loadConfig();
+    return {
+      maxIterations: config.maxIter,
+      ...(config.contextMaxTokens === undefined
+        ? {}
+        : { contextMaxTokens: config.contextMaxTokens }),
+      verificationMaxCycles: config.verificationMaxCycles,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function getVerificationStatus(
+  output: string,
+): RunMetadata["verificationStatus"] {
+  const match = output.match(/Estado de verificación:\s*(\w+)/);
+  if (!match) {
+    return undefined;
+  }
+
+  const status = match[1];
+  return status === "not_needed" || status === "passed" || status === "failed" || status === "unavailable"
+    ? status
+    : undefined;
+}
+
+function getCommit(): string | undefined {
+  const result = spawnSync("git", ["rev-parse", "HEAD"], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  const commit = result.stdout?.trim();
+  return result.status === 0 && commit ? commit : undefined;
+}
+
+function getEffectiveModel(output: string): { provider?: string; model?: string } {
+  const match = output.match(/Motor iniciado:\s*([^()]+)\s*\(([^)]+)\)/);
+  return match
+    ? { provider: match[1].trim(), model: match[2].trim() }
+    : {};
+}
+
+function runRequiredFixtureTests(
+  workspacePath: string,
+  assertions: BenchmarkAssertions,
+): string[] {
+  if (!assertions.testCommandMustPass) {
+    return [];
+  }
+
+  const testFile = path.join(workspacePath, "math.test.ts");
+  const tsxCli = path.join(root, "node_modules", "tsx", "dist", "cli.mjs");
+  if (!fs.existsSync(testFile) || !fs.existsSync(tsxCli)) {
+    return ["No se pudo localizar el ejecutor o la prueba requerida por la fixture."];
+  }
+
+  const result = spawnSync(process.execPath, [tsxCli, testFile], {
+    cwd: workspacePath,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  if (result.error || result.status !== 0) {
+    const details = `${result.stdout ?? ""}\n${result.stderr ?? ""}`.trim();
+    return [
+      `La prueba requerida por la fixture falló${details ? `: ${details}` : "."}`,
+    ];
+  }
+
+  return [];
 }
 
 function determineStatus(
@@ -118,6 +227,14 @@ function determineStatus(
     )
   ) {
     return "max_iterations";
+  }
+
+  if (output.includes("La verificación no se completó correctamente.")) {
+    return "verification_failed";
+  }
+
+  if (exitCode === 2) {
+    return "unverified";
   }
 
   if (exitCode !== 0 && exitCode !== null) {
@@ -183,6 +300,17 @@ for (const task of tasks) {
     continue;
   }
 
+  const assertionsFile = path.join(taskDir, "expected", "assertions.json");
+  let assertions: BenchmarkAssertions;
+  try {
+    assertions = JSON.parse(fs.readFileSync(assertionsFile, "utf8")) as BenchmarkAssertions;
+  } catch (error: unknown) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.error(`No se pudieron leer las aserciones de ${task}: ${reason}`);
+    failedRuns++;
+    continue;
+  }
+
   const runId = `${task}-${Date.now()}`;
 
   const workspaceDir = path.join(
@@ -199,8 +327,11 @@ for (const task of tasks) {
   );
 
   console.log(
-    `📁 Workspace: ${workspaceDir}`,
+    `Workspace: ${workspaceDir}`,
   );
+
+  const before = snapshotWorkspace(workspaceDir);
+  const mode = assertions.mustNotModifyFiles ? "read_only" : "edit";
 
   const startedAt = new Date();
   const startedAtMs = performance.now();
@@ -211,6 +342,8 @@ for (const task of tasks) {
       "-r",
       "tsx/cjs",
       path.join(root, "src", "index.ts"),
+      "--mode",
+      mode === "read_only" ? "read-only" : "edit",
       taskText,
     ],
     {
@@ -250,6 +383,21 @@ for (const task of tasks) {
   const metrics = extractMetrics(
     combinedOutput,
   );
+  const effectiveModel = getEffectiveModel(combinedOutput);
+  const baseAcceptance = evaluateBenchmarkAssertions(
+    assertions,
+    workspaceDir,
+    combinedOutput,
+    before,
+  );
+  const fixtureTestFailures = runRequiredFixtureTests(workspaceDir, assertions);
+  const acceptance: AcceptanceMetadata = {
+    passed: baseAcceptance.passed && fixtureTestFailures.length === 0,
+    failures: [...baseAcceptance.failures, ...fixtureTestFailures],
+  };
+  const finalStatus = status === "success" && !acceptance.passed
+    ? "acceptance_failed"
+    : status;
 
   const runMetadata: RunMetadata = {
     runId,
@@ -259,8 +407,14 @@ for (const task of tasks) {
     durationMs,
     exitCode: result.status,
     signal: result.signal,
-    status,
+    status: finalStatus,
+    mode,
+    ...effectiveModel,
+    commit: getCommit(),
+    configuration: getPublicConfiguration(),
+    verificationStatus: getVerificationStatus(combinedOutput),
     metrics,
+    acceptance,
     workspace: workspaceDir,
     stdout,
     stderr,
@@ -276,7 +430,7 @@ for (const task of tasks) {
   );
 
   console.log("\n--------------------------------");
-  console.log(`STATUS: ${status}`);
+  console.log(`STATUS: ${finalStatus}`);
 
   if (metrics.iterations !== undefined) {
     console.log(
@@ -318,11 +472,18 @@ for (const task of tasks) {
     `Runner duration: ${durationMs} ms`,
   );
 
-  if (status === "success") {
-    console.log(`✅ ${task} completada.`);
+  if (!acceptance.passed) {
+    console.log("Acceptance failures:");
+    for (const failure of acceptance.failures) {
+      console.log(`- ${failure}`);
+    }
+  }
+
+  if (finalStatus === "success") {
+    console.log(`${task} completada.`);
   } else {
     console.log(
-      `❌ ${task} terminó con estado: ${status}`,
+      `${task} terminó con estado: ${finalStatus}`,
     );
 
     failedRuns++;

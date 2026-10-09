@@ -1,10 +1,14 @@
 // src/cli/doctor.ts
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
-import { getProviderApiKeyName, loadConfig } from '../config/env';
+import {
+  getGlobalConfigPath,
+  getProviderApiKeyName,
+  loadConfig,
+} from '../config/env';
+import { getAvailableKnowledgeSections, loadProjectKnowledge } from '../memory/projectKnowledge';
 
-export const runDoctor = () => {
+export const runDoctor = (): boolean => {
   console.log("🩺 Iniciando diagnóstico de ia-agent...\n");
 
   let hasErrors = false;
@@ -14,9 +18,7 @@ export const runDoctor = () => {
   console.log(`[✓] Node.js instalado (${nodeVersion})`);
 
   // 2. Comprobar Configuración Global
-  const globalPath = os.platform() === 'win32' && process.env.APPDATA
-    ? path.join(process.env.APPDATA, 'ia-agent', 'config.json')
-    : path.join(os.homedir(), '.config', 'ia-agent', 'config.json');
+  const globalPath = getGlobalConfigPath();
 
   if (fs.existsSync(globalPath)) {
     console.log(`[✓] Configuración global detectada (${globalPath})`);
@@ -29,6 +31,11 @@ export const runDoctor = () => {
     const config = loadConfig();
     console.log(`[✓] Proveedor IA configurado: ${config.provider}`);
     console.log(`[✓] Modelo seleccionado: ${config.model}`);
+    console.log(`[✓] Máximo de iteraciones: ${config.maxIter}`);
+    console.log(`[✓] Máximo de ciclos de verificación: ${config.verificationMaxCycles}`);
+    if (config.contextMaxTokens) {
+      console.log(`[✓] Presupuesto de contexto: ${config.contextMaxTokens} tokens`);
+    }
     
     // Mostramos que existe la clave, pero NUNCA la imprimimos por pantalla
     const keyName = getProviderApiKeyName(config.provider);
@@ -50,8 +57,8 @@ export const runDoctor = () => {
   
   if (fs.existsSync(iaPath)) {
     console.log(`[✓] Memoria del proyecto detectada en: ${iaPath}`);
-    if (fs.existsSync(path.join(iaPath, 'rules.md'))) console.log(`    └─ rules.md encontrado`);
-    if (fs.existsSync(path.join(iaPath, 'lessons.md'))) console.log(`    └─ lessons.md encontrado`);
+    const sections = getAvailableKnowledgeSections(loadProjectKnowledge(projectPath));
+    console.log(`    └─ Secciones disponibles: ${sections.length ? sections.join(', ') : 'ninguna'}`);
   } else {
     console.log(`[!] No se ha detectado carpeta .ia/ en este proyecto (${projectPath})`);
     console.log(`    (El agente funcionará, pero no tendrá reglas específicas de este proyecto).`);
@@ -63,4 +70,6 @@ export const runDoctor = () => {
   } else {
     console.log("✅ Entorno saludable. ¡El agente está listo para trabajar!");
   }
+
+  return !hasErrors;
 };

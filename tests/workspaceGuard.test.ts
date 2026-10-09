@@ -113,7 +113,7 @@ const runTests = async () => {
       },
       execute: () => {
         executed = true;
-        return 'unexpected';
+        return { output: 'unexpected', success: true, status: 'success' };
       },
     };
     assert.match(

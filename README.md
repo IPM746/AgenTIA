@@ -1,170 +1,62 @@
-# ia-agent-core
+# AgenTIA
 
-`ia-agent-core` is a personal project I'm building with **Node.js and TypeScript** while learning about artificial intelligence and coding agents.
+AgenTIA es un agente personal de programación para trabajar desde la terminal en proyectos locales. Puede leer y editar archivos dentro del workspace, ejecutar comprobaciones permitidas y usar un proveedor LLM configurable.
 
-The idea is to build an agent that can work on a local project, read and modify files, run commands, and work with different AI providers.
+La primera versión personal prioriza resultados trazables y límites claros:
 
-This is not a finished project and it's not intended to compete with existing coding agent tools. I'm mainly building it to understand how these systems work internally and to experiment with different approaches.
+- herramientas con resultados estructurados, estados de error y códigos de salida;
+- modos explícitos de solo lectura y edición;
+- Security Gate para permisos, rutas, enlaces simbólicos, archivos sensibles y comandos de riesgo;
+- verificación acotada tras cambios con `test`, `typecheck` y `build` cuando el proyecto los define;
+- configuración global sin secretos y conocimiento por proyecto en `.ia/`;
+- benchmarks aislados con criterios de aceptación sobre archivos y pruebas reales.
 
-## What does it currently do?
+No es un sandbox ni una herramienta de aislamiento de procesos. Los comandos permitidos se ejecutan con los permisos del usuario. Tampoco incluye una GUI, multiagente ni un sistema de skills integrado en el flujo normal.
 
-* Agent loop based on **ReAct**.
-* Read and modify project files.
-* Run commands through the terminal.
-* Project-specific memory using `.ia/`.
-* Support for multiple AI providers.
-* Basic limits for file reads and terminal output.
-* `doctor` command to check the configuration.
-* Basic token and context usage metrics.
+## Inicio rápido
 
-## Project memory
-
-One of the ideas I'm experimenting with is giving each project its own memory.
-
-A project can contain a `.ia/` folder:
-
-```text
-.ia/
-├── rules.md
-├── style.md
-├── architecture.md
-└── lessons.md
-```
-
-These files can contain things such as project rules, coding style, architecture information, or problems that have been found before.
-
-The goal is for the agent to adapt to the project it is working on instead of always using the same context.
-
-## AI providers
-
-The project uses a Factory so the AI provider can be changed without modifying the main agent logic.
-
-Currently I'm working with:
-
-* Gemini
-* Ollama
-* OpenRouter
-
-More providers may be added in the future.
-
-Select a provider with `AI_PROVIDER` and its matching credentials:
+En Windows 11, tras instalar Node.js y Git:
 
 ```powershell
-$env:AI_PROVIDER = 'gemini'
-$env:GEMINI_API_KEY = '...'
-
-$env:AI_PROVIDER = 'ollama'
-$env:AI_MODEL = 'qwen3.5:4b'
-
-$env:AI_PROVIDER = 'openrouter'
-$env:AI_MODEL = 'provider/model-name'
-$env:OPENROUTER_API_KEY = '...'
-```
-
-## Context
-
-The agent currently limits file reads and terminal output to **3000 characters** to avoid unnecessarily large inputs.
-
-Files inside `.ia/` are not affected by this limit.
-
-This is still an area I'm working on. One of the next steps is to make context usage more efficient by allowing the agent to search files and read only the parts it actually needs.
-
-The project now also keeps basic metrics about token usage and context growth between iterations. I'm using these metrics to understand how much context the agent is actually consuming before making further optimizations.
-
-## Architecture
-
-I'm trying to keep the agent logic separate from the interface that uses it.
-
-For now, the main interface is a CLI, but the core uses callbacks so it does not depend directly on the CLI. The idea is to reuse the core from other interfaces in the future, such as a possible VS Code extension.
-
-```text
-              CLI
-               |
-           Callbacks
-               |
-               v
-        Agent Engine
-         ReAct Loop
-          /      \
-         /        \
-        v          v
-     Tools      LLM Factory
-       |         /       \
-       |        /         \
-    Files   Gemini     OpenRouter
-    Terminal
-```
-
-## Security
-
-Since the agent works directly with the project and can run commands, I've added some basic protections:
-
-* Protection against `path traversal`.
-* Real path checks to help prevent escapes through symbolic links.
-* Blocking access to some sensitive files.
-* Restrictions on certain potentially destructive commands.
-
-This is **not a sandbox**. Commands are executed with the permissions of the user running the agent.
-
-The current protections are only a first layer of security and there is still work to do in this area.
-
-## Current status
-
-The project is currently a **functional prototype under active development**.
-
-The basic agent loop and tools are working, but many parts of the project are still experimental and may change as I learn more.
-
-Some of the things I want to work on next are:
-
-* Improve context management and reduce unnecessary token usage.
-* Add file search and partial file reading.
-* Improve the project memory system.
-* Add a command for importing coding style rules from a file.
-* Add more providers and models.
-* Look into better ways to isolate agent execution.
-* Create a VS Code extension.
-
-## Installation
-
-```bash
 git clone https://github.com/IPM746/AgenTIA.git
 cd AgenTIA
 npm install
+npm test
 npm run build
 npm link
 ```
 
-It can then be used from any project:
+Configura un proveedor y comprueba el entorno:
 
-```bash
-ia-agent "Review this project and tell me what you would improve"
-```
-
-You can also check the configuration with:
-
-```bash
+```powershell
 ia-agent doctor
 ```
 
-## Why did I make this?
+Desde el directorio de un proyecto:
 
-I'm learning about software development and artificial intelligence, and I wanted to understand better how coding agents actually work.
+```powershell
+ia-agent init
+ia-agent --mode read-only "Explica la arquitectura de este proyecto"
+ia-agent --mode edit "Corrige el fallo de las pruebas y verifica el cambio"
+```
 
-Instead of only using existing tools, I decided to try building one myself.
+Si se omite `--mode`, el modo actual por compatibilidad es `edit`. Para revisiones y exploración usa siempre `--mode read-only`.
 
-Through this project I'm learning about working with LLMs, designing an agent loop, creating tools that allow the model to interact with files and the terminal, managing context, and thinking about the security problems that appear when a program can modify a real project.
+## Documentación
 
-The project will probably change quite a lot as I learn more. That's part of the point.
+- [Guía de uso en español](docs/GUIA_USO.md): instalación, proveedores, configuración, seguridad, `.ia/`, verificación y diagnóstico.
+- [Ejemplos de uso](docs/EJEMPLOS_USO.md): comandos que se pueden copiar y adaptar.
 
-## Technologies
+## Desarrollo
 
-* TypeScript
-* Node.js
-* Gemini
-* OpenRouter
-* LLMs
-* ReAct
+```powershell
+npm test
+npm run build
+npm run benchmark
+```
 
-## License
+Las ejecuciones de benchmark se realizan sobre copias de las fixtures y se guardan en `benchmarks/runs/`, que está excluido de Git. Un benchmark puede terminar como `provider_error` si el proveedor remoto agota cuota o no está disponible; eso no se registra como éxito.
 
-MIT
+## Estado
+
+El proyecto está preparado para uso personal supervisado. Las protecciones reducen riesgos frecuentes, pero no sustituyen la revisión humana, copias de seguridad ni un sandbox real. Consulta la guía antes de usar el modo de edición en un repositorio importante.

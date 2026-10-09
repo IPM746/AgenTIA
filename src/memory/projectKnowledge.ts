@@ -31,7 +31,7 @@ const sectionFiles: Record<ProjectKnowledgeSectionName, readonly string[]> = {
   identity: ['identity.md'],
   architecture: ['architecture.md'],
   technologies: ['technologies.md'],
-  conventions: ['conventions.md', 'rules.md'],
+  conventions: ['conventions.md', 'rules.md', 'style.md'],
   decisions: ['decisions.md', 'lessons.md'],
   constraints: ['constraints.md'],
   security: ['security.md'],
@@ -97,6 +97,61 @@ export const createProjectKnowledgeMessage = (
   source: 'project_memory',
   content: renderProjectKnowledge(knowledge, names),
 });
+
+const sectionKeywords: Record<ProjectKnowledgeSectionName, readonly string[]> = {
+  identity: ['project', 'proyecto', 'purpose', 'objetivo'],
+  architecture: ['architecture', 'arquitectura', 'module', 'módulo', 'api', 'structure', 'estructura'],
+  technologies: ['typescript', 'javascript', 'node', 'dependency', 'dependencia', 'technology', 'tecnolog', 'version'],
+  conventions: ['style', 'estilo', 'format', 'lint', 'convention', 'convencion', 'rule', 'regla'],
+  decisions: ['decision', 'decisión', 'migration', 'migración', 'legacy', 'lesson', 'lección'],
+  constraints: ['constraint', 'restric', 'limit', 'límite', 'performance', 'rendimiento'],
+  security: ['security', 'seguridad', 'permission', 'permiso', 'auth', 'secret', 'secreto'],
+};
+
+export const selectProjectKnowledgeSections = (
+  task: string,
+  knowledge: ProjectKnowledge,
+): ProjectKnowledgeSectionName[] => {
+  const available = getAvailableKnowledgeSections(knowledge);
+  const normalizedTask = task.toLowerCase();
+  const selected = available.filter((section) =>
+    sectionKeywords[section].some((keyword) => normalizedTask.includes(keyword)),
+  );
+
+  if (selected.length) {
+    return selected;
+  }
+
+  return available.filter((section) =>
+    section === 'identity' || section === 'conventions',
+  );
+};
+
+const truncateSection = (content: string, maxCharsPerSection: number): string =>
+  content.length > maxCharsPerSection
+    ? `${content.slice(0, maxCharsPerSection)}\n[Sección de ProjectKnowledge truncada para el contexto inicial.]`
+    : content;
+
+export const createProjectKnowledgeTaskMessage = (
+  task: string,
+  knowledge: ProjectKnowledge,
+  maxCharsPerSection = 2000,
+): Message => {
+  const selected = selectProjectKnowledgeSections(task, knowledge);
+  const content = selected
+    .map((name) => knowledge.sections[name])
+    .filter((section): section is ProjectKnowledgeSection => section !== undefined)
+    .map((section) =>
+      `=== ${section.name.toUpperCase()} ===\n${truncateSection(section.content, maxCharsPerSection)}`,
+    )
+    .join('\n\n');
+
+  return {
+    role: 'user',
+    source: 'project_memory',
+    content: content || 'No hay conocimiento de proyecto relevante disponible.',
+  };
+};
 
 /**
  * Initial prompts get only an inventory. A future ContextBuilder can select

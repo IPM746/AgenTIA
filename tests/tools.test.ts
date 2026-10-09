@@ -11,7 +11,7 @@ const schema = { type: 'object' };
 const context: ToolContext = { workspacePath: 'C:/workspace' };
 
 const createTool = (
-  execute: Tool['execute'] = () => 'ok',
+  execute: Tool['execute'] = () => ({ output: 'ok', success: true, status: 'success' }),
 ): Tool => ({
   name: 'sample_tool',
   description: 'A test tool.',
@@ -46,7 +46,7 @@ const runTests = async () => {
   const executableTool = createTool((args, toolContext) => {
     receivedArgs = args;
     receivedContext = toolContext;
-    return 'executed';
+    return { output: 'executed', success: true, status: 'success' };
   });
   const executor = new ToolExecutor();
   const result = await executor.execute(

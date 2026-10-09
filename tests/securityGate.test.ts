@@ -26,7 +26,7 @@ const tool: Tool = {
     required: ['command', 'mode'],
     additionalProperties: false,
   },
-  execute: () => 'executed',
+  execute: () => ({ output: 'executed', success: true, status: 'success' }),
 };
 
 const runTests = async () => {

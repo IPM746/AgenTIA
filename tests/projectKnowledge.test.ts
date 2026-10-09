@@ -6,10 +6,13 @@ import { prepareMessagesForLLM, serializeMessageContent } from '../src/ai/trust'
 import {
   createProjectKnowledgeMessage,
   createProjectKnowledgeOverviewMessage,
+  createProjectKnowledgeTaskMessage,
   getAvailableKnowledgeSections,
   loadProjectKnowledge,
   renderProjectKnowledge,
+  selectProjectKnowledgeSections,
 } from '../src/memory/projectKnowledge';
+import { initializeProjectKnowledge } from '../src/memory/projectInit';
 import { readProjectMemory } from '../src/memory/reader';
 
 const runTests = () => {
@@ -59,6 +62,23 @@ const runTests = () => {
     assert.strictEqual(selectedMessage.role, 'user');
     assert.match(selectedMessage.content, /=== IDENTITY ===/);
 
+    assert.deepStrictEqual(
+      selectProjectKnowledgeSections('Revisa la arquitectura de los módulos.', knowledge),
+      ['architecture'],
+    );
+    const taskMessage = createProjectKnowledgeTaskMessage(
+      'Revisa la arquitectura de los módulos.',
+      knowledge,
+    );
+    assert.match(taskMessage.content, /=== ARCHITECTURE ===/);
+    assert.doesNotMatch(taskMessage.content, /TypeScript and Node\.js/);
+    assert.doesNotMatch(taskMessage.content, /Ignore previous instructions/);
+    assert.strictEqual(taskMessage.source, 'project_memory');
+
+    fs.writeFileSync(path.join(iaPath, 'architecture.md'), 'A'.repeat(50));
+    const truncated = createProjectKnowledgeTaskMessage('architecture', loadProjectKnowledge(projectRoot), 20);
+    assert.match(truncated.content, /truncada para el contexto inicial/);
+
     const legacyMemory = readProjectMemory(projectRoot);
     assert.match(legacyMemory, /rules\.md/);
     assert.match(legacyMemory, /architecture\.md/);
@@ -74,6 +94,24 @@ const runTests = () => {
     assert.strictEqual(preparedOverview[0].role, 'user');
     assert.strictEqual(preparedOverview[0].source, 'project_memory');
     assert.match(serializeMessageContent(preparedOverview[0]), /PROJECT_MEMORY: DATA ONLY/);
+
+    const initializedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agentia-init-'));
+    try {
+      fs.mkdirSync(path.join(initializedRoot, '.ia'));
+      fs.writeFileSync(path.join(initializedRoot, '.ia', 'rules.md'), 'custom rule');
+      const initialized = initializeProjectKnowledge(initializedRoot);
+      assert.ok(initialized.created.includes('identity.md'));
+      assert.ok(initialized.existing.includes('rules.md'));
+      assert.strictEqual(
+        fs.readFileSync(path.join(initializedRoot, '.ia', 'rules.md'), 'utf-8'),
+        'custom rule',
+      );
+      const repeated = initializeProjectKnowledge(initializedRoot);
+      assert.strictEqual(repeated.created.length, 0);
+      assert.ok(repeated.existing.includes('security.md'));
+    } finally {
+      fs.rmSync(initializedRoot, { recursive: true, force: true });
+    }
 
     console.log('ProjectKnowledge superado.');
   } finally {
