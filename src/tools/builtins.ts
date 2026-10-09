@@ -1,11 +1,11 @@
 import {
-  applyPatchTool,
+  applyPatch,
   executeCommand,
-  listFilesTool,
-  readFileTool,
-  readJSONTool,
-  searchFileTool,
-  writeFileTool,
+  listFiles,
+  readFile,
+  readJSON,
+  searchFile,
+  writeFile,
 } from './index';
 import { ToolRegistry } from './registry';
 import { Tool } from './types';
@@ -44,7 +44,7 @@ const builtInTools: Tool[] = [
     },
     aliases: ['readFileTool', 'read_file'],
     execute: (args, context) =>
-      readFileTool(
+      readFile(
         getFilePath(args),
         context,
         getLineNumber(args, 'startLine'),
@@ -66,7 +66,7 @@ const builtInTools: Tool[] = [
     },
     aliases: ['buscar_archivo'],
     execute: (args, context) =>
-      searchFileTool(getFilePath(args), getSearchTerm(args), context),
+      searchFile(getFilePath(args), getSearchTerm(args), context),
   },
   {
     name: 'escribir_archivo',
@@ -84,7 +84,7 @@ const builtInTools: Tool[] = [
     },
     aliases: ['writeFileTool', 'write_file'],
     execute: (args, context) =>
-      writeFileTool(getFilePath(args), getContent(args), context),
+      writeFile(getFilePath(args), getContent(args), context),
   },
   {
     name: 'ejecutar_comando',
@@ -120,7 +120,7 @@ const builtInTools: Tool[] = [
     },
     aliases: ['apply_patch'],
     execute: (args, context) =>
-      applyPatchTool(
+      applyPatch(
         getFilePath(args),
         args.search as string,
         args.replacement as string,
@@ -140,7 +140,7 @@ const builtInTools: Tool[] = [
       required: ['filePath'],
     },
     execute: (args, context) =>
-      listFilesTool(getFilePath(args), context),
+      listFiles(getFilePath(args), context),
   },
   {
     name: 'readJSONTool',
@@ -155,7 +155,7 @@ const builtInTools: Tool[] = [
       required: ['filePath'],
     },
     execute: (args, context) =>
-      readJSONTool(getFilePath(args), context),
+      readJSON(getFilePath(args), context),
   },
 ];
 

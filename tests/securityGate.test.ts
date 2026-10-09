@@ -97,7 +97,23 @@ const runTests = async () => {
     /bloqueada.*alto riesgo/,
   );
   assert.match(
+    await executor.execute(tool, { command: 'rm -rf cache', mode: 'safe' }, context),
+    /bloqueada.*alto riesgo/,
+  );
+  assert.match(
     await executor.execute(tool, { command: 'cmd /c echo ok', mode: 'safe' }, context),
+    /requiere confirmación/,
+  );
+  assert.match(
+    await executor.execute(tool, { command: 'cmd.exe /c echo ok', mode: 'safe' }, context),
+    /requiere confirmación/,
+  );
+  assert.match(
+    await executor.execute(tool, { command: 'pwsh -c echo ok', mode: 'safe' }, context),
+    /requiere confirmación/,
+  );
+  assert.match(
+    await executor.execute(tool, { command: 'Invoke-Expression "echo ok"', mode: 'safe' }, context),
     /requiere confirmación/,
   );
 

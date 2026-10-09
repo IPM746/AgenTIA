@@ -1,5 +1,5 @@
 
-import { loadConfig } from "../config/env";
+import { AgentConfig, loadConfig } from "../config/env";
 import { createAIClient } from "../ai/factory";
 import {
   createProjectKnowledgeOverviewMessage,
@@ -8,8 +8,9 @@ import {
 import { createBuiltinToolRegistry } from "../tools/builtins";
 import { ToolExecutor } from "../tools/executor";
 import { ToolContext } from "../tools/types";
+import { ToolRegistry } from "../tools/registry";
 import { AgentMetrics, calculateHistoryChars } from "./metrics";
-import { Message } from "../ai/client";
+import { LLMClient, Message } from "../ai/client";
 import { compareContexts, optimizeContext } from "./context";
 import {
   getVerificationCommands,
@@ -27,11 +28,25 @@ export interface AgentCallbacks {
   onError?: (error: Error) => void;
 }
 
+export interface AgentRunOptions {
+  config?: AgentConfig;
+  ai?: LLMClient;
+  toolRegistry?: ToolRegistry;
+  toolExecutor?: ToolExecutor;
+  verificationCommands?: readonly string[];
+}
+
+export interface AgentRunResult {
+  finalText: string;
+  metrics: AgentMetrics;
+}
+
 export const runAgentTask = async (
   task: string,
   projectPath: string,
   callbacks: AgentCallbacks = {},
-) => {
+  options: AgentRunOptions = {},
+): Promise<AgentRunResult> => {
   const runStartedAt = performance.now();
 
   const metrics: AgentMetrics = {
@@ -46,19 +61,25 @@ export const runAgentTask = async (
     result: "failure",
     errors: [],
     verificationAttempts: [],
+    verificationStatus: 'not_needed',
   };
 
   const log = (msg: string) =>
     callbacks.onLog ? callbacks.onLog(msg) : console.log(msg);
+  let finalText = '';
+  const finish = (text: string): void => {
+    finalText = text;
+    callbacks.onFinish?.(text, metrics);
+  };
 
   try {
-    const config = loadConfig();
+    const config = options.config ?? loadConfig();
 
     log(
       `⚙️ [Config] Motor iniciado: ${config.provider} (${config.model})`,
     );
 
-    const ai = createAIClient(
+    const ai = options.ai ?? createAIClient(
       config.provider,
       config.apiKey,
       config.model,
@@ -75,8 +96,8 @@ export const runAgentTask = async (
         'process.execute',
       ],
     };
-    const toolRegistry = createBuiltinToolRegistry();
-    const toolExecutor = new ToolExecutor();
+    const toolRegistry = options.toolRegistry ?? createBuiltinToolRegistry();
+    const toolExecutor = options.toolExecutor ?? new ToolExecutor();
     const commandTool = toolRegistry.resolve('ejecutar_comando');
     if (!commandTool) {
       throw new Error('La herramienta de ejecución de comandos no está registrada.');
@@ -86,7 +107,7 @@ export const runAgentTask = async (
       commandTool,
       toolContext,
       {
-        commands: getVerificationCommands(projectPath),
+        commands: options.verificationCommands ?? getVerificationCommands(projectPath),
         maxCycles: config.verificationMaxCycles,
       },
     );
@@ -130,11 +151,16 @@ PROCESO:
 
     const addVerificationFeedback = (verification: VerificationResult): void => {
       metrics.verificationAttempts.push(...verification.attempts);
+      metrics.verificationStatus = verification.skipped
+        ? 'unavailable'
+        : verification.passed
+          ? 'passed'
+          : 'failed';
       const details = verification.attempts
         .map((attempt) =>
           `Ciclo ${attempt.cycle}, comando: ${attempt.command}\nResultado:\n${attempt.result}`,
         )
-        .join('\n\n');
+        .join('\n\n') || verification.reason || 'Sin detalles de verificación.';
 
       messages.push({
         role: 'user',
@@ -309,9 +335,7 @@ PROCESO:
           metrics.iterations = iteracion;
           metrics.latencyMs = performance.now() - runStartedAt;
           metrics.result = 'success';
-          if (callbacks.onFinish) {
-            callbacks.onFinish(responseText, metrics);
-          }
+          finish(responseText);
           break;
         }
 
@@ -337,9 +361,7 @@ PROCESO:
           metrics.iterations = iteracion;
           metrics.latencyMs = performance.now() - runStartedAt;
           metrics.result = 'failure';
-          if (callbacks.onFinish) {
-            callbacks.onFinish('La verificación no se completó correctamente.', metrics);
-          }
+          finish('La verificación no se completó correctamente.');
           break;
         }
 
@@ -399,12 +421,7 @@ PROCESO:
 
         console.log("");
 
-        if (callbacks.onFinish) {
-          callbacks.onFinish(
-            responseText,
-            metrics,
-          );
-        }
+        finish(responseText);
 
         break;
       }
@@ -424,12 +441,7 @@ PROCESO:
         `\n⚠️ [Seguridad] Se alcanzó el límite estricto de ${maxIteraciones} iteraciones.`,
       );
 
-      if (callbacks.onFinish) {
-        callbacks.onFinish(
-          "Límite de iteraciones alcanzado.",
-          metrics,
-        );
-      }
+      finish('Límite de iteraciones alcanzado.');
     }
   } catch (error: unknown) {
     const message =
@@ -457,9 +469,9 @@ PROCESO:
       callbacks.onError(normalizedError);
     }
 
-    if (callbacks.onFinish) {
-      callbacks.onFinish("", metrics);
-    }
+    finish('');
   }
+
+  return { finalText, metrics };
 }
 

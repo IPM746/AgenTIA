@@ -26,6 +26,8 @@ export class ToolExecutor {
       return {
         output: `Error: Argumentos inválidos para ${tool.name}: ${validation.errors.join(' ')}`,
         success: false,
+        status: 'validation_error',
+        error: validation.errors.join(' '),
       };
     }
 
@@ -34,6 +36,8 @@ export class ToolExecutor {
       return {
         output: `Error: Herramienta ${tool.name} bloqueada por política de seguridad: ${permissionDecision.reason}.`,
         success: false,
+        status: 'permission_denied',
+        error: permissionDecision.reason,
       };
     }
 
@@ -42,6 +46,7 @@ export class ToolExecutor {
         return {
           output: `Error: Herramienta ${tool.name} no declara los argumentos de ruta requeridos por el Security Gate.`,
           success: false,
+          status: 'validation_error',
         };
       }
 
@@ -51,6 +56,7 @@ export class ToolExecutor {
           return {
             output: `Error: Argumento de ruta inválido para ${tool.name}: ${argumentName}.`,
             success: false,
+            status: 'validation_error',
           };
         }
 
@@ -60,6 +66,8 @@ export class ToolExecutor {
           return {
             output: error instanceof Error ? error.message : String(error),
             success: false,
+            status: 'path_denied',
+            error: error instanceof Error ? error.message : String(error),
           };
         }
       }
@@ -78,14 +86,14 @@ export class ToolExecutor {
       return {
         output: `Error: Herramienta ${tool.name} ${action} por política de seguridad: ${decision.reason}.`,
         success: false,
+        status: 'blocked',
+        error: decision.reason,
       };
     }
 
     try {
       const execution = await tool.execute(args, context);
-      return typeof execution === 'string'
-        ? { output: execution, success: true }
-        : execution;
+      return execution;
     } catch (error: unknown) {
       const message =
         error instanceof Error
@@ -95,6 +103,8 @@ export class ToolExecutor {
       return {
         output: `Excepción al ejecutar ${tool.name}: ${message}`,
         success: false,
+        status: 'exception',
+        error: message,
       };
     }
   }

@@ -2,7 +2,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import { ToolContext, ToolExecutionResult } from './types';
+import {
+  ToolContext,
+  ToolExecutionResult,
+  ToolExecutionStatus,
+} from './types';
 import { resolveWorkspacePath } from './security/workspaceGuard';
 
 /**
@@ -28,6 +32,36 @@ const getValidatedPath = (
   return absolutePath;
 };
 
+const succeeded = (
+  output: string,
+  details: Omit<ToolExecutionResult, 'output' | 'success' | 'status'> = {},
+): ToolExecutionResult => ({
+  output,
+  success: true,
+  status: 'success',
+  ...details,
+});
+
+const failed = (
+  output: string,
+  status: Exclude<ToolExecutionStatus, 'success'> = 'operation_failed',
+  details: Omit<ToolExecutionResult, 'output' | 'success' | 'status' | 'error'> = {},
+): ToolExecutionResult => ({
+  output,
+  success: false,
+  status,
+  error: output,
+  ...details,
+});
+
+const failedFileOperation = (error: unknown): ToolExecutionResult => {
+  const message = error instanceof Error ? error.message : String(error);
+  return failed(
+    message,
+    message.startsWith('[Seguridad]') ? 'path_denied' : 'operation_failed',
+  );
+};
+
 
 // Excepción: La memoria del proyecto NUNCA se trunca
 const isProjectMemory = (filePath: string): boolean => {
@@ -36,17 +70,17 @@ const isProjectMemory = (filePath: string): boolean => {
   return normalizedPath.includes('/.ia/') || normalizedPath.startsWith('.ia/');
 };
 
-export const readFileTool = (
+export const readFile = (
   filePath: string,
   context: ToolContext,
   startLine?: number,
   endLine?: number,
-): string => {
+): ToolExecutionResult => {
   try {
     const safePath = getValidatedPath(filePath, context);
     
     if (!fs.existsSync(safePath)) {
-      return `Error: El archivo no existe en la ruta: ${filePath}`;
+      return failed(`Error: El archivo no existe en la ruta: ${filePath}`);
     }
     
     const content = fs.readFileSync(safePath, 'utf-8');
@@ -55,32 +89,39 @@ export const readFileTool = (
       const start = Math.max(1, startLine ?? 1);
       const end = Math.min(lines.length, endLine ?? lines.length);
       if (start > end) {
-        return 'Error: El rango de líneas solicitado no es válido.';
+        return failed('Error: El rango de líneas solicitado no es válido.', 'validation_error');
       }
-      return lines
+      return succeeded(lines
         .slice(start - 1, end)
         .map((line, index) => `${String(start + index).padStart(4, ' ')} | ${line}`)
-        .join('\n');
+        .join('\n'));
     }
     
     // Solo truncamos si es muy grande Y NO es memoria del proyecto
     const MAX_CHARS = 3000;
     if (content.length > MAX_CHARS && !isProjectMemory(safePath)) {
       const truncated = content.substring(0, MAX_CHARS);
-      return `${truncated}\n\n[Contenido truncado: mostrando ${MAX_CHARS} de ${content.length} caracteres. Si necesitas ver el resto, utiliza comandos como 'grep' o herramientas de búsqueda.]`;
+      return succeeded(`${truncated}\n\n[Contenido truncado: mostrando ${MAX_CHARS} de ${content.length} caracteres. Si necesitas ver el resto, utiliza comandos como 'grep' o herramientas de búsqueda.]`);
     }
     
-    return content;
+    return succeeded(content);
   } catch (error: any) {
-    return error.message;
+    return failedFileOperation(error);
   }
 };
 
-export const writeFileTool = (
+export const readFileTool = (
+  filePath: string,
+  context: ToolContext,
+  startLine?: number,
+  endLine?: number,
+): string => readFile(filePath, context, startLine, endLine).output;
+
+export const writeFile = (
   filePath: string,
   content: string,
   context: ToolContext,
-): string => {
+): ToolExecutionResult => {
   try {
     const safePath = getValidatedPath(filePath, context);
     
@@ -90,9 +131,50 @@ export const writeFileTool = (
     }
     
     fs.writeFileSync(safePath, content, 'utf-8');
-    return `Archivo guardado exitosamente en: ${filePath}`;
+    return succeeded(`Archivo guardado exitosamente en: ${filePath}`);
   } catch (error: any) {
-    return error.message;
+    return failedFileOperation(error);
+  }
+};
+
+export const writeFileTool = (
+  filePath: string,
+  content: string,
+  context: ToolContext,
+): string => writeFile(filePath, content, context).output;
+
+export const applyPatch = (
+  filePath: string,
+  search: string,
+  replacement: string,
+  context: ToolContext,
+): ToolExecutionResult => {
+  try {
+    const safePath = getValidatedPath(filePath, context);
+    if (!fs.existsSync(safePath)) {
+      return failed(`Error: El archivo no existe en la ruta: ${filePath}`);
+    }
+    if (!search) {
+      return failed('Error: El texto a sustituir no puede estar vacío.', 'validation_error');
+    }
+
+    const content = fs.readFileSync(safePath, 'utf-8');
+    const firstMatch = content.indexOf(search);
+    if (firstMatch === -1) {
+      return failed('Error: No se encontró el texto exacto para aplicar el parche.');
+    }
+    if (content.indexOf(search, firstMatch + search.length) !== -1) {
+      return failed('Error: El texto del parche aparece más de una vez; usa una coincidencia más específica.');
+    }
+
+    const updated =
+      content.substring(0, firstMatch) +
+      replacement +
+      content.substring(firstMatch + search.length);
+    fs.writeFileSync(safePath, updated, 'utf-8');
+    return succeeded(`Parche aplicado exitosamente en: ${filePath}`);
+  } catch (error: any) {
+    return failedFileOperation(error);
   }
 };
 
@@ -101,51 +183,23 @@ export const applyPatchTool = (
   search: string,
   replacement: string,
   context: ToolContext,
-): string => {
-  try {
-    const safePath = getValidatedPath(filePath, context);
-    if (!fs.existsSync(safePath)) {
-      return `Error: El archivo no existe en la ruta: ${filePath}`;
-    }
-    if (!search) {
-      return 'Error: El texto a sustituir no puede estar vacío.';
-    }
+): string => applyPatch(filePath, search, replacement, context).output;
 
-    const content = fs.readFileSync(safePath, 'utf-8');
-    const firstMatch = content.indexOf(search);
-    if (firstMatch === -1) {
-      return 'Error: No se encontró el texto exacto para aplicar el parche.';
-    }
-    if (content.indexOf(search, firstMatch + search.length) !== -1) {
-      return 'Error: El texto del parche aparece más de una vez; usa una coincidencia más específica.';
-    }
-
-    const updated =
-      content.substring(0, firstMatch) +
-      replacement +
-      content.substring(firstMatch + search.length);
-    fs.writeFileSync(safePath, updated, 'utf-8');
-    return `Parche aplicado exitosamente en: ${filePath}`;
-  } catch (error: any) {
-    return error.message;
-  }
-};
-
-export const searchFileTool = (
+export const searchFile = (
   filePath: string,
   searchTerm: string,
   context: ToolContext,
-): string => {
+): ToolExecutionResult => {
   try {
     const safePath = getValidatedPath(filePath, context);
     if (!fs.existsSync(safePath)) { 
-      return `Error: El archivo no existe en la ruta: ${filePath}`;
+      return failed(`Error: El archivo no existe en la ruta: ${filePath}`);
     }
     else if (!fs.statSync(safePath).isFile()) {
-      return `Error: La ruta especificada no es un archivo: ${filePath}`;
+      return failed(`Error: La ruta especificada no es un archivo: ${filePath}`);
     }
     else if (searchTerm.trim() === '') {
-      return `Error: El término de búsqueda no puede estar vacío.`;
+      return failed('Error: El término de búsqueda no puede estar vacío.', 'validation_error');
     }
     else {
       const content = fs.readFileSync(safePath, 'utf-8');
@@ -166,7 +220,7 @@ export const searchFileTool = (
       }
 
       if (resultLineIndices.size === 0) {
-        return `No se encontraron coincidencias para el término de búsqueda: ${searchTerm}`;
+        return succeeded(`No se encontraron coincidencias para el término de búsqueda: ${searchTerm}`);
       }
 
       // 2. Ordenar y formatear la salida con números de línea
@@ -191,66 +245,91 @@ export const searchFileTool = (
       // Control de tamaño por si la búsqueda devuelve medio archivo
       const MAX_CHARS = 3000;
       if (output.length > MAX_CHARS) {
-        return `${output.substring(0, MAX_CHARS)}\n\n[Salida truncada: Demasiadas coincidencias. Por favor, refina tu término de búsqueda.]`;
+        return succeeded(`${output.substring(0, MAX_CHARS)}\n\n[Salida truncada: Demasiadas coincidencias. Por favor, refina tu término de búsqueda.]`);
       }
 
-      return output;
+      return succeeded(output);
     }
   } catch (error: any) {
-    return `Error buscando en el archivo: ${error.message}`;
+    const result = failedFileOperation(error);
+    return {
+      ...result,
+      output: result.status === 'path_denied'
+        ? result.output
+        : `Error buscando en el archivo: ${result.output}`,
+    };
+  }
+};
+
+export const searchFileTool = (
+  filePath: string,
+  searchTerm: string,
+  context: ToolContext,
+): string => searchFile(filePath, searchTerm, context).output;
+
+export const listFiles = (
+  dirPath: string,
+  context: ToolContext,
+): ToolExecutionResult => {
+  try {
+    const safePath = getValidatedPath(dirPath, context);
+    if (!fs.existsSync(safePath)) {
+      return failed(`Error: El directorio no existe en la ruta: ${dirPath}`);
+    }
+    
+    if (!fs.statSync(safePath).isDirectory()) {
+      return failed(`Error: La ruta especificada no es un directorio: ${dirPath}`);
+    }
+    const files = fs.readdirSync(safePath);
+    return succeeded(files.join('\n'));
+  } catch (error: any) {
+    const result = failedFileOperation(error);
+    return {
+      ...result,
+      output: result.status === 'path_denied'
+        ? result.output
+        : `Error listando archivos: ${result.output}`,
+    };
   }
 };
 
 export const listFilesTool = (
   dirPath: string,
   context: ToolContext,
-): string => {
-  try {
-    const safePath = getValidatedPath(dirPath, context);
-    const lowerCmd = dirPath.toLowerCase();
-    
-    if (lowerCmd.includes('.git')) {
-      return `[Seguridad] Comando bloqueado: No se permiten operaciones directas sobre .git`;
-    }
-    if (lowerCmd.includes('../') || lowerCmd.includes('..\\')) {
-      return `[Seguridad] Comando bloqueado: No se permite navegar fuera del directorio actual.`;
-    }
-    if (!fs.existsSync(safePath)) {
-      return `Error: El directorio no existe en la ruta: ${dirPath}`;
-    }
-    
-    if (!fs.statSync(safePath).isDirectory()) {
-      return `Error: La ruta especificada no es un directorio: ${dirPath}`;
-    }
-    const files = fs.readdirSync(safePath);
-    return files.join('\n');
-  } catch (error: any) {
-    return `Error listando archivos: ${error.message}`;
-  }
-};
+): string => listFiles(dirPath, context).output;
 
-// Unused, only for future aplications
-export const readJSONTool = (
+export const readJSON = (
   filePath: string,
   context: ToolContext,
-): string => {
+): ToolExecutionResult => {
   try {
     const safePath = getValidatedPath(filePath, context);
 
     if (!fs.existsSync(safePath)) {
-      return `Error: El archivo no existe en la ruta: ${filePath}`;
+      return failed(`Error: El archivo no existe en la ruta: ${filePath}`);
     }
     const content = fs.readFileSync(safePath, 'utf-8');
     try {
       const jsonData = JSON.parse(content);
-      return JSON.stringify(jsonData, null, 2);
+      return succeeded(JSON.stringify(jsonData, null, 2));
     } catch (error: any) {
-      return `Error parseando JSON: ${error.message}`;
+      return failed(`Error parseando JSON: ${error.message}`);
     }
   } catch (error: any) {
-    return `Error leyendo archivo JSON: ${error.message}`;
+    const result = failedFileOperation(error);
+    return {
+      ...result,
+      output: result.status === 'path_denied'
+        ? result.output
+        : `Error leyendo archivo JSON: ${result.output}`,
+    };
   }
 };
+
+export const readJSONTool = (
+  filePath: string,
+  context: ToolContext,
+): string => readJSON(filePath, context).output;
 
 /**
  * 🛡️ CAPA DE RESTRICCIÓN DE TERMINAL
@@ -274,18 +353,20 @@ const commandOutputToText = (value: unknown): string => {
 export const executeCommand = (
   command: string,
   context: ToolContext,
+  timeoutMs = 30000,
 ): ToolExecutionResult => {
   try {
     const stdout = execSync(command, {
       encoding: 'utf-8',
       cwd: context.workspacePath,
-      timeout: 30000,
+      timeout: timeoutMs,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
     return {
       output: limitCommandOutput(stdout || 'Comando ejecutado correctamente (sin salida en consola).'),
       success: true,
+      status: 'success',
       exitCode: 0,
       stdout,
       stderr: '',
@@ -301,7 +382,14 @@ export const executeCommand = (
     return {
       output: limitCommandOutput(`Error ejecutando comando${exitCode === undefined ? '' : ` (exit code ${exitCode})`}: ${details}`),
       success: false,
+      status: error.code === 'ETIMEDOUT'
+        ? 'timeout'
+        : typeof error.signal === 'string'
+          ? 'signal'
+          : 'operation_failed',
+      error: error.message,
       exitCode,
+      ...(typeof error.signal === 'string' ? { signal: error.signal } : {}),
       stdout,
       stderr,
     };

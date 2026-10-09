@@ -10,7 +10,7 @@
     "build": "tsc",
     "start": "tsx src/index.ts",
     "dev": "tsx src/index.ts",
-    "test": "tsx tests/security.test.ts && tsx tests/tools.test.ts && tsx tests/securityGate.test.ts && tsx tests/workspaceGuard.test.ts && tsx tests/trust.test.ts && tsx tests/providers.test.ts && tsx tests/verification.test.ts && tsx tests/projectKnowledge.test.ts && tsx src/engine/context.test.ts",
+    "test": "tsx tests/security.test.ts && tsx tests/tools.test.ts && tsx tests/securityGate.test.ts && tsx tests/workspaceGuard.test.ts && tsx tests/toolResults.test.ts && tsx tests/trust.test.ts && tsx tests/providers.test.ts && tsx tests/verification.test.ts && tsx tests/agentVerification.integration.test.ts && tsx tests/projectKnowledge.test.ts && tsx src/engine/context.test.ts",
     "benchmark": "tsx benchmarks/run.ts"
   },
   "keywords": [

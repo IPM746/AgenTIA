@@ -33,6 +33,7 @@ const createCommandTool = (results: string[], calls: string[]): Tool => ({
     return {
       output,
       success: !output.startsWith('Error:'),
+      status: output.startsWith('Error:') ? 'operation_failed' : 'success',
       exitCode: output.startsWith('Error:') ? 1 : 0,
       stdout: output.startsWith('Error:') ? '' : output,
       stderr: output.startsWith('Error:') ? output : '',
@@ -64,12 +65,14 @@ const runTests = async () => {
   const success = createLoop(['tests ok', 'types ok', 'build ok']);
   const successfulResult = await success.loop.verify();
   assert.strictEqual(successfulResult.passed, true);
+  assert.strictEqual(successfulResult.skipped, false);
   assert.strictEqual(successfulResult.attempts.length, 3);
   assert.deepStrictEqual(success.calls, ['npm test', 'npm run typecheck', 'npm run build']);
 
   const failure = createLoop(['Error: tests failed']);
   const failedResult = await failure.loop.verify();
   assert.strictEqual(failedResult.passed, false);
+  assert.strictEqual(failedResult.skipped, false);
   assert.strictEqual(failedResult.canRepair, true);
   assert.strictEqual(failedResult.exhausted, false);
   assert.strictEqual(failedResult.attempts[0].error, 'Error: tests failed');
@@ -126,6 +129,18 @@ const runTests = async () => {
 
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'agentia-verification-'));
   try {
+    assert.deepStrictEqual(getVerificationCommands(tempRoot), []);
+    const emptyLoop = new VerificationLoop(
+      new ToolExecutor(),
+      createCommandTool(['unexpected'], []),
+      context,
+      { commands: [] },
+    );
+    const emptyResult = await emptyLoop.verify();
+    assert.strictEqual(emptyResult.passed, true);
+    assert.strictEqual(emptyResult.skipped, true);
+    assert.match(emptyResult.reason ?? '', /No hay comandos/);
+
     fs.writeFileSync(path.join(tempRoot, 'package.json'), JSON.stringify({
       scripts: { test: 'tsx tests', typecheck: 'tsc --noEmit', build: 'tsc' },
     }));
@@ -134,6 +149,8 @@ const runTests = async () => {
       'npm run typecheck',
       'npm run build',
     ]);
+    fs.writeFileSync(path.join(tempRoot, 'package.json'), JSON.stringify({ scripts: {} }));
+    assert.deepStrictEqual(getVerificationCommands(tempRoot), []);
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }

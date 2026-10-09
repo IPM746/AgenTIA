@@ -26,10 +26,24 @@ export interface ToolContext {
 export interface ToolExecutionResult {
   output: string;
   success: boolean;
+  status: ToolExecutionStatus;
+  error?: string;
   exitCode?: number;
+  signal?: string;
   stdout?: string;
   stderr?: string;
 }
+
+export type ToolExecutionStatus =
+  | 'success'
+  | 'validation_error'
+  | 'permission_denied'
+  | 'path_denied'
+  | 'blocked'
+  | 'operation_failed'
+  | 'timeout'
+  | 'signal'
+  | 'exception';
 
 export interface Tool {
   name: string;
@@ -43,5 +57,5 @@ export interface Tool {
   execute(
     args: Record<string, unknown>,
     context: ToolContext,
-  ): string | ToolExecutionResult | Promise<string | ToolExecutionResult>;
+  ): ToolExecutionResult | Promise<ToolExecutionResult>;
 }

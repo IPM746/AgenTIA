@@ -33,9 +33,9 @@ export class SecurityPolicy {
       return {
         allowed: false,
         requiresConfirmation: true,
-        blocked: false,
+        blocked: true,
         risk,
-        reason: 'requiere confirmación humana por señales de riesgo medio',
+        reason: 'requiere confirmación humana explícita por señales de riesgo medio; no hay interfaz de aprobación disponible',
       };
     }
 

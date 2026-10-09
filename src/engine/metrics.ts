@@ -38,6 +38,7 @@ export interface AgentMetrics {
     result: 'success' | 'failure' | 'max_iterations';
     errors: string[];
     verificationAttempts: VerificationAttempt[];
+    verificationStatus: 'not_needed' | 'passed' | 'failed' | 'unavailable';
 }
 
 export const calculateHistoryChars = (messages: Message[]): number => {

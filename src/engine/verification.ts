@@ -17,6 +17,8 @@ export interface VerificationAttempt {
 export interface VerificationResult {
   cycle: number;
   passed: boolean;
+  skipped: boolean;
+  reason?: string;
   canRepair: boolean;
   exhausted: boolean;
   attempts: readonly VerificationAttempt[];
@@ -78,10 +80,23 @@ export class VerificationLoop {
   }
 
   async verify(): Promise<VerificationResult> {
+    if (this.commands.length === 0) {
+      return {
+        cycle: this.completedCycles,
+        passed: true,
+        skipped: true,
+        reason: 'No hay comandos de verificación configurados para el proyecto.',
+        canRepair: false,
+        exhausted: false,
+        attempts: [],
+      };
+    }
+
     if (this.completedCycles >= this.maxCycles) {
       return {
         cycle: this.completedCycles,
         passed: false,
+        skipped: false,
         canRepair: false,
         exhausted: true,
         attempts: [],
@@ -116,6 +131,7 @@ export class VerificationLoop {
         return {
           cycle,
           passed: false,
+          skipped: false,
           canRepair: cycle < this.maxCycles,
           exhausted: cycle >= this.maxCycles,
           attempts: cycleAttempts,
@@ -126,6 +142,7 @@ export class VerificationLoop {
     return {
       cycle,
       passed: true,
+      skipped: false,
       canRepair: false,
       exhausted: false,
       attempts: cycleAttempts,

@@ -9,7 +9,7 @@ export interface LexicalSecurityResult {
 }
 
 const highRiskPatterns: Array<[string, RegExp]> = [
-  ['borrado recursivo', /(?:^|[;&|]\s*)(?:rm\s+-[a-z]*r|rmdir(?:\s+\/s)?|rd\s+\/s|remove-item\s+.*-recurse|del\s+\/s)\b/i],
+  ['borrado recursivo', /(?:^|[;&|]\s*)(?:rm\s+-[a-z]*r[a-z]*|rmdir(?:\s+\/s)?|rd\s+\/s|remove-item\s+.*-recurse|del\s+\/s)\b/i],
   ['formateo de disco', /(?:^|[;&|]\s*)format\b/i],
   ['cambio de permisos', /(?:icacls|takeown|chmod\s+(?:-r\s+)?(?:777|a\+w))/i],
   ['script descargado y ejecutado', /(?:invoke-webrequest|curl|wget).*(?:\||;|&&).*?(?:iex|invoke-expression|sh|bash|powershell)/i],
@@ -18,7 +18,8 @@ const highRiskPatterns: Array<[string, RegExp]> = [
 
 const mediumRiskPatterns: Array<[string, RegExp]> = [
   ['comandos encadenados', /(?:&&|\|\||(?<!\|)\|(?!\|)|;|&)/],
-  ['shell secundaria', /\b(?:cmd\s+\/c|powershell(?:\.exe)?\s+-command)\b/i],
+  ['shell secundaria', /\b(?:cmd(?:\.exe)?\s+\/c|(?:powershell(?:\.exe)?|pwsh)\s+-(?:command|c))\b/i],
+  ['ejecución indirecta', /\b(?:invoke-expression|iex|start-process)\b/i],
   ['salida del workspace', /(?:\.\.\\|\.\.\/)/],
 ];
 
